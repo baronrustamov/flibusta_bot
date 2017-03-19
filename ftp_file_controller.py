@@ -3,18 +3,17 @@ import time
 import threading
 import os
 
+from telebot import logger
 import config
+
 
 
 class Controller(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
-        self.exit = False
+        self.exit = threading.Event()
         self.conn = None
         self.__connect()
-
-    def __del__(self):
-        self.conn.close()
 
     def __connect(self):
         while True:
@@ -25,7 +24,7 @@ class Controller(threading.Thread):
                                             password=config.MYSQL_PASSWORD,
                                             charset='utf8mb4')
             except pymysql.Error as err:
-                print(f"{time.strftime('%H:%M:%S')} {err}")
+                logger.debug(err)
             else:
                 return
 
@@ -36,8 +35,7 @@ class Controller(threading.Thread):
                 res = cursor.fetchone()
             return res
         except pymysql.Error as err:
-            if config.DEBUG:
-                print(f"fetchone {time.strftime('%H:%M:%S')} {err}")
+            logger.debug(err)
             return None
 
     def get_life_time(self, filename):
@@ -52,13 +50,15 @@ class Controller(threading.Thread):
             with self.conn.cursor() as cursor:
                 cursor.execute('DELETE FROM fileLifeTime WHERE filename=%s', (file,))
             self.conn.commit()
-        except pymysql.Error as e:
-            if config.DEBUG:
-                print(e)
+        except pymysql.Error as err:
+            logger.debug(err)
         os.remove(config.FTP_DIR + '/' + file)
 
     def run(self):
-        while not self.exit:
+        self.exit.clear()
+        while True:
+            if self.exit.is_set():
+                break
             files = os.listdir(config.FTP_DIR)
             files.remove('download.php')
             for file in files:
@@ -68,10 +68,8 @@ class Controller(threading.Thread):
                         self.delete_file(file)
                 else:
                     os.remove(config.FTP_DIR + '/' + file)
-            for i in range(60//5):
-                if self.exit:
-                    return
-                time.sleep(5)
+            self.exit.wait(60)
 
     def stop(self):
-        self.exit = True
+        print('<< Closing ftp controller... >>')
+        self.exit.set()

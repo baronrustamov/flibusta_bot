@@ -1,5 +1,5 @@
 import pymysql
-import time
+from telebot import logger
 
 import config
 
@@ -17,7 +17,7 @@ class Database:
                                             user=config.MYSQL_USER,
                                             password=config.MYSQL_PASSWORD)
             except pymysql.Error as err:
-                print(f"{time.strftime('%H:%M:%S')} {err}")
+                logger.debug(err)
             else:
                 return
 
@@ -27,9 +27,8 @@ class Database:
                 cursor.execute(sql, args)
                 return cursor.fetchone()
         except pymysql.Error as err:
+            logger.debug(err)
             self.conn.ping(reconnect=True)
-            if config.DEBUG:
-                print(f"fetchone {time.strftime('%H:%M:%S')} {err}")
             return None
 
     def fetchall(self, sql, args):
@@ -38,9 +37,8 @@ class Database:
                 cursor.execute(sql, args)
                 return cursor.fetchall()
         except pymysql.Error as err:
+            logger.debug(err)
             self.conn.ping(reconnect=True)
-            if config.DEBUG:
-                print(f"{time.strftime('%H:%M:%S')} {err}")
             return None
 
     def __create_lang_settings(self, user_id):
@@ -49,10 +47,9 @@ class Database:
                 cursor.execute('INSERT INTO settings (user_id, allow_uk, allow_be) VALUES (%s, %s, %s)',
                                (user_id, 0, 0))
             self.conn.commit()
-        except pymysql.Error as e:
+        except pymysql.Error as err:
+            logger.debug(err)
             self.conn.ping(reconnect=True)
-            if config.DEBUG:
-                print(e)
 
     def set_land_settings(self, user_id, lang, status):
         try:
@@ -64,18 +61,16 @@ class Database:
                     cursor.execute('UPDATE settings SET allow_be = %s WHERE settings.user_id = %s',
                                    (status, user_id))
             self.conn.commit()
-        except pymysql.Error as e:
+        except pymysql.Error as err:
+            logger.debug(err)
             self.conn.ping(reconnect=True)
-            if config.DEBUG:
-                print(e)
 
     def get_lang_settings(self, user_id):
         try:
             res = self.fetchone("SELECT allow_uk, allow_be FROM settings WHERE user_id=%s", (user_id,))
-        except pymysql.Error as e:
+        except pymysql.Error as err:
+            logger.debug(err)
             self.conn.ping(reconnect=True)
-            if config.DEBUG:
-                print(e)
             return {'allow_uk': 0, 'allow_be': 0}
         else:
             if res:

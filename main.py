@@ -1,6 +1,7 @@
 # pyTelegramBotAPI lib
 import telebot  # https://github.com/eternnoir/pyTelegramBotAPI
-from telebot import types
+from telebot.types import (InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery, InlineQuery,
+                           InlineQueryResultArticle, InputTextMessageContent)
 
 # transcription translate lib
 import transliterate  # https://github.com/barseghyanartur/transliterate
@@ -19,13 +20,15 @@ import botan
 
 # bot's modules and config files
 import config
-from catalog import Library
+from catalog import Library, Book
 from debug_utils import timeit
 from users_db import Database
 from ftp_file_controller import Controller
+from webhook_check import Checker
 
 # bot's consts
 ELEMENTS_ON_PAGE = 7
+BOOKS_CHANGER = 5
 
 bot = telebot.TeleBot(config.TOKEN)
 lib = Library()
@@ -40,7 +43,7 @@ else:
 
 
 def track(uid, msg, name):  # botan tracker
-    if type(msg) is types.Message:
+    if type(msg) is Message:
         return botan.track(config.BOTAN_TOKEN, uid,
                            {'message': {
                                'user': {
@@ -53,7 +56,7 @@ def track(uid, msg, name):  # botan tracker
                            }
                            },
                            name=name)
-    if type(msg) is types.CallbackQuery:
+    if type(msg) is CallbackQuery:
         return botan.track(config.BOTAN_TOKEN, uid,
                            {'callback_query': {
                                'user': {
@@ -66,7 +69,7 @@ def track(uid, msg, name):  # botan tracker
                            }
                            },
                            name=name)
-    if type(msg) is types.InlineQuery:
+    if type(msg) is InlineQuery:
         return botan.track(config.BOTAN_TOKEN, uid,
                            {'inline_query': {
                                'user': {
@@ -80,47 +83,59 @@ def track(uid, msg, name):  # botan tracker
                            name=name)
 
 
-def normalize(book, type_):  # remove chars that don't accept in Telegram Bot API
+def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept in Telegram Bot API
     filename = ''
     if book.author:
         if book.author.short:
             filename += book.author.short + '_-_'
     filename += book.title
     filename = transliterate.translit(filename, 'ru', reversed=True)
-    filename = filename.strip('(').strip(')').strip(',').strip('«').strip('…').strip('.')
-    filename = filename.strip('’').strip('!').strip('"').strip('?').strip('»').strip("'")
+    filename = filename.replace('(', '').replace(')', '').replace(',', '').replace('…', '').replace('.', '')
+    filename = filename.replace('’', '').replace('!', '').replace('"', '').replace('?', '').replace('»', '')
+    filename = filename.replace('«', '').replace('\'', '').replace(':', '')
     filename = filename.replace('—', '-').replace('/', '_').replace('№', 'N')
-    filename = filename.replace(' ', '_').replace('–', '-')
+    filename = filename.replace(' ', '_').replace('–', '-').replace('á', 'a').replace(' ', '_')
     return filename + '.' + type_
 
 
-def get_keyboard(page, pages, t):  # make keyboard for current page
+def get_keyboard(page: int, pages: int, t: str) -> InlineKeyboardMarkup or None:  # make keyboard for current page
     if pages == 1:
         return None
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = InlineKeyboardMarkup()
+    row = []
     if page == 1:
-        keyboard.row(types.InlineKeyboardButton('⏩', callback_data=f'{t}_2'))
-        if pages >= 7:
-            next_l = min(pages, page+ELEMENTS_ON_PAGE)
-            keyboard.row(types.InlineKeyboardButton(f'{next_l} ⏭',
-                                                    callback_data=f'{t}_{next_l}'))
+        row.append(InlineKeyboardButton('≻', callback_data=f'{t}_2'))
+        if pages >= BOOKS_CHANGER:
+            next_l = min(pages, page + BOOKS_CHANGER)
+            row.append(InlineKeyboardButton(f'{next_l} >>',
+                                            callback_data=f'{t}_{next_l}'))
+        keyboard.row(*row)
     elif page == pages:
-        keyboard.row(types.InlineKeyboardButton('⏪', callback_data=f'{t}_{pages-1}'))
-        if pages >= 7:
-            previous_l = max(1, page-ELEMENTS_ON_PAGE)
-            keyboard.row(types.InlineKeyboardButton(f'⏮ {previous_l}',
-                                                    callback_data=f'{t}_{previous_l}'))
+        if pages >= BOOKS_CHANGER:
+            previous_l = max(1, page - BOOKS_CHANGER)
+            row.append(InlineKeyboardButton(f'<< {previous_l}',
+                                            callback_data=f'{t}_{previous_l}'))
+        row.append(InlineKeyboardButton('<', callback_data=f'{t}_{pages-1}'))
+        keyboard.row(*row)
     else:
-        keyboard.row(types.InlineKeyboardButton('⏪', callback_data=f'{t}_{page-1}'),
-                     types.InlineKeyboardButton('⏩', callback_data=f'{t}_{page+1}'))
-        if pages >= 7:
-            next_l = min(pages, page + ELEMENTS_ON_PAGE)
-            previous_l = max(1, page - ELEMENTS_ON_PAGE)
-            keyboard.row(types.InlineKeyboardButton(f'⏮ {previous_l}',
-                                                    callback_data=f'{t}_{previous_l}'),
-                         types.InlineKeyboardButton(f'{next_l} ⏭',
-                                                    callback_data=f'{t}_{next_l}')
-                         )
+        if pages >= BOOKS_CHANGER:
+            next_l = min(pages, page + BOOKS_CHANGER)
+            previous_l = max(1, page - BOOKS_CHANGER)
+
+            if previous_l != page - 1:
+                row.append(InlineKeyboardButton(f'<< {previous_l}',
+                                                callback_data=f'{t}_{previous_l}'))
+
+            row.append(InlineKeyboardButton('<', callback_data=f'{t}_{page-1}'))
+            row.append(InlineKeyboardButton('>', callback_data=f'{t}_{page+1}'))
+
+            if next_l != page + 1:
+                row.append(InlineKeyboardButton(f'{next_l} >>',
+                                                callback_data=f'{t}_{next_l}'))
+            keyboard.row(*row)
+        else:
+            keyboard.row(InlineKeyboardButton('<', callback_data=f'{t}_{page-1}'),
+                         InlineKeyboardButton('>', callback_data=f'{t}_{page+1}'))
     return keyboard
 
 
@@ -133,13 +148,21 @@ def start(msg):
                      "Этот бот поможет тебе загружать книги с флибусты.\n"
                      "Набери /help что бы получить помощь.\n"
                      "Информация о боте /info.\n"
-                     "Материальная помощь /donate\n")
+                     "Оставить отзыв /vote.\n"
+                     "Материальная помощь /donate.\n")
         bot.reply_to(msg, start_msg)
         track(msg.from_user.id, msg, 'start')
     else:
         type_, id_ = rq.split('_')
         send_book(msg, type_, book_id=int(id_))
         track(msg.from_user.id, msg, 'get_shared_book')
+
+
+@bot.message_handler(commands=['vote'])
+def vote_foo(msg):  # send vote link
+    vote_msg = "https://t.me/storebot?start=flibusta_rebot"
+    bot.reply_to(msg, vote_msg)
+    track(msg.from_user.id, msg, 'vote')
 
 
 @bot.message_handler(commands=['help'])
@@ -357,7 +380,7 @@ def download(type_, book_id, msg):
             bot.reply_to(msg, "Ошибка подключения к серверу! Попробуйте позднее.")
             return None
     if '<!DOCTYPE html' in str(r.content[:100]) or '<html>' in str(r.content[:100]):  # send message to user when get
-        bot.reply_to(msg, 'Ошибка!')                                                  # html file
+        bot.reply_to(msg, 'Ошибка!')  # html file
         return None
     return r
 
@@ -378,10 +401,10 @@ def send_book(msg, type_, book_id=None, file_id=None):  # download from flibusta
         if book.author.short:
             caption += book.author.normal_name
     caption += '\n' + book.title
-    markup = types.InlineKeyboardMarkup()
+    markup = InlineKeyboardMarkup()
     markup.row(
-        types.InlineKeyboardButton('Поделиться',
-                                   switch_inline_query=f"share_{book_id}"))
+        InlineKeyboardButton('Поделиться',
+                             switch_inline_query=f"share_{book_id}"))
     if file_id:
         try:
             bot.send_document(msg.chat.id, file_id, reply_to_message_id=msg.message_id,
@@ -437,8 +460,8 @@ def send_book(msg, type_, book_id=None, file_id=None):  # download from flibusta
     text += f'📎  <a href="http://35.164.29.201/ftp/download.php?filename={filename}">Скачать</a>\n'
     text += 'Ссылка будет доступна 3 часа ( начиная с ' + time.strftime("%H:%M") + ' MSK)'
 
-    keyboard = types.InlineKeyboardMarkup().row(
-        types.InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
+    keyboard = InlineKeyboardMarkup().row(
+        InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
     )
     bot.reply_to(msg, text, parse_mode='HTML', reply_markup=keyboard)
 
@@ -452,9 +475,9 @@ def inline_share(query):  # share book to others user with use inline query
     book = lib.book_by_id(book_id)
     if not book:
         return
-    result.append(types.InlineQueryResultArticle('1', 'Поделиться',
-                                                 types.InputTextMessageContent(book.to_share, parse_mode='HTML',
-                                                                               disable_web_page_preview=True), ))
+    result.append(InlineQueryResultArticle('1', 'Поделиться',
+                                           InputTextMessageContent(book.to_share, parse_mode='HTML',
+                                                                   disable_web_page_preview=True), ))
     bot.answer_inline_query(query.id, result)
 
 
@@ -465,17 +488,17 @@ def inline_hand(query):  # inline search
     user_sets = db.get_lang_settings(query.from_user.id)
     books = lib.book_by_title(query.query, user_sets)
     if not books:
-        bot.answer_inline_query(query.id, [types.InlineQueryResultArticle('1', 'Книги не найдены!',
-                                                                          types.InputTextMessageContent(
-                                                                              'Книги не найдены!'))]
+        bot.answer_inline_query(query.id, [InlineQueryResultArticle(
+            '1', 'Книги не найдены!', InputTextMessageContent('Книги не найдены!')
+        )]
                                 )
         return
     book_index = 1
     result = list()
     for book in books[0:min(len(books) - 1, 50 - 1)]:
-        result.append(types.InlineQueryResultArticle(str(book_index), book.title,
-                                                     types.InputTextMessageContent(book.to_share, parse_mode='HTML',
-                                                                                   disable_web_page_preview=True)))
+        result.append(InlineQueryResultArticle(str(book_index), book.title,
+                                               InputTextMessageContent(book.to_share, parse_mode='HTML',
+                                                                       disable_web_page_preview=True)))
         book_index += 1
     bot.answer_inline_query(query.id, result)
 
@@ -484,15 +507,15 @@ def inline_hand(query):  # inline search
 def settings(msg):  # send settings message
     user_set = db.get_lang_settings(msg.from_user.id)
     text = 'Настройки: '
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = InlineKeyboardMarkup()
     if user_set['allow_uk'] == 0:
-        keyboard.row(types.InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
+        keyboard.row(InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
     else:
-        keyboard.row(types.InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
+        keyboard.row(InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
     if user_set['allow_be'] == 0:
-        keyboard.row(types.InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
+        keyboard.row(InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
     else:
-        keyboard.row(types.InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
+        keyboard.row(InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
     bot.reply_to(msg, text, reply_markup=keyboard)
 
 
@@ -504,16 +527,16 @@ def lang_setup(query):  # language settings
     else:
         db.set_land_settings(query.from_user.id, lang, 0)
 
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = InlineKeyboardMarkup()
     user_set = db.get_lang_settings(query.from_user.id)
     if user_set['allow_uk'] == 0:
-        keyboard.row(types.InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
+        keyboard.row(InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
     else:
-        keyboard.row(types.InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
+        keyboard.row(InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
     if user_set['allow_be'] == 0:
-        keyboard.row(types.InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
+        keyboard.row(InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
     else:
-        keyboard.row(types.InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
+        keyboard.row(InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
     bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
                                   reply_markup=keyboard)
 
@@ -552,8 +575,8 @@ def update_file_link(query):
     text += f'📎  <a href="http://35.164.29.201/ftp/download.php?filename={filename}">Скачать</a>\n'
     text += 'Ссылка будет доступна 3 часа (начиная с ' + time.strftime("%H:%M") + ' MSK)'
 
-    keyboard = types.InlineKeyboardMarkup().row(
-        types.InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
+    keyboard = InlineKeyboardMarkup().row(
+        InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
     )
 
     bot.edit_message_text(text, chat_id=msg.chat.id, message_id=msg.message_id,
@@ -564,9 +587,9 @@ def update_file_link(query):
 @bot.message_handler(func=lambda message: True)
 def search(msg):
     track(msg.from_user.id, msg, 'receive_message')
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton('По названию', callback_data='b_1'),
-                 types.InlineKeyboardButton('По авторам', callback_data='a_1')
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton('По названию', callback_data='b_1'),
+                 InlineKeyboardButton('По авторам', callback_data='a_1')
                  )
     bot.reply_to(msg, 'Поиск: ', reply_markup=keyboard)
 
@@ -578,6 +601,8 @@ if config.WEBHOOK:
     import flask
 
     app = flask.Flask(__name__)
+
+    checker = Checker(bot)
 
 
     @app.route('/', methods=['GET', 'POST'])
@@ -591,6 +616,7 @@ if config.WEBHOOK:
             json_string = flask.request.get_data().decode('utf-8')
             update = telebot.types.Update.de_json(json_string)
             bot.process_new_updates([update])
+            checker.last_update = time.time()
             return ''
         else:
             flask.abort(403)
@@ -603,15 +629,18 @@ if config.WEBHOOK:
     bot.set_webhook(url=config.WEBHOOK_URL_BASE + config.WEBHOOK_URL_PATH,
                     certificate=open(config.WEBHOOK_SSL_CERT, 'r'))
 
+    checker.start()
+
     app.run(host=config.WEBHOOK_LISTEN,
             port=config.WEBHOOK_PORT,
             ssl_context=(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV),
             debug=config.DEBUG)
+
+    checker.stop()
 
     bot.remove_webhook()
 
 else:
     bot.polling()
 
-print('Closing ftp controller...')
 ftp.stop()

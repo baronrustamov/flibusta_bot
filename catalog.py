@@ -1,6 +1,7 @@
 import pymysql
 import time
 import datetime
+from typing import List
 from telebot import logger
 
 import config
@@ -14,7 +15,7 @@ class Author:
         self.middle_name = middle_name
 
     @property
-    def normal_name(self):
+    def normal_name(self) -> str:
         temp = ''
         if self.last_name:
             temp = self.last_name
@@ -31,7 +32,7 @@ class Author:
             return temp
 
     @property
-    def short(self):
+    def short(self) -> str:
         temp = ''
         if self.last_name:
             temp += self.last_name
@@ -46,21 +47,21 @@ class Author:
         return temp
 
     @property
-    def to_send(self):
+    def to_send(self) -> str:
         return f'👤 <b>{self.normal_name}</b>\n/a_{self.id}\n\n'
 
 
 class Book:
-    def __init__(self, book, author):
+    def __init__(self, book: tuple, author: Author):
         self.author = author
-        self.title = book[0]
-        self.subtitle = book[1]
-        self.lang = book[2]
+        self.title = book[0]  # type: str
+        self.subtitle = book[1]  # type: str
+        self.lang = book[2]  # type: str
         self.id_ = book[3]
-        self.file_type = book[4]
+        self.file_type = book[4]  # type: str
 
     @property
-    def to_send(self):
+    def to_send(self) -> str:
         res = f'<b>{self.title}</b>'
         if self.author:
             res += f' | {self.lang}\n<b>{self.author.normal_name}</b>\n'
@@ -72,7 +73,7 @@ class Book:
             return res + f'⬇ {self.file_type}: /{self.file_type}_{self.id_}\n\n'
 
     @property
-    def to_share(self):
+    def to_share(self) -> str:
         url = 'https://telegram.me/flibusta_rebot?start='
         res = f'<b>{self.title}</b>'
         if self.author:
@@ -89,7 +90,7 @@ class Book:
                           f'/{self.file_type}_{self.id_}</a>\n')
 
 
-def for_search(arg):
+def for_search(arg: str) -> str:
     args = arg.split()
     if len(args) == 1:
         return arg
@@ -100,24 +101,20 @@ def for_search(arg):
         return result
 
 
-def sort_by_alphabet(obj):
+def sort_by_alphabet(obj: Book) -> str:
     if obj.title:
         return obj.title.strip('«').strip('»')
     else:
-        return None
+        return ''
 
 
-def lang_filter(books, lang_sets):
+def lang_filter(books: List[Book], lang_sets) -> List[Book]:
     langs = ['ru']
     for key in lang_sets.keys():
         if lang_sets[key]:
             _, lang = key.split('_')
             langs.append(lang)
-    res = []
-    for book in books:
-        if book.lang in langs:
-            res.append(book)
-    return res
+    return [book for book in books if book.lang in langs]
 
 
 class Library:
