@@ -140,13 +140,14 @@ def get_keyboard(page: int, pages: int, t: str) -> InlineKeyboardMarkup or None:
 
 
 @bot.message_handler(commands=['start'])
-def start(msg):
+def start(msg: Message):
     try:  # try get data that use in user share book
         _, rq = msg.text.split(' ')
     except ValueError:
         start_msg = ("Привет!\n"
                      "Этот бот поможет тебе загружать книги с флибусты.\n"
                      "Набери /help что бы получить помощь.\n"
+                     "Настройки /settings.\n"
                      "Информация о боте /info.\n"
                      "Оставить отзыв /vote.\n"
                      "Материальная помощь /donate.\n")
@@ -159,14 +160,14 @@ def start(msg):
 
 
 @bot.message_handler(commands=['vote'])
-def vote_foo(msg):  # send vote link
+def vote_foo(msg: Message):  # send vote link
     vote_msg = "https://t.me/storebot?start=flibusta_rebot"
     bot.reply_to(msg, vote_msg)
     track(msg.from_user.id, msg, 'vote')
 
 
 @bot.message_handler(commands=['help'])
-def help_foo(msg):  # send help message
+def help_foo(msg: Message):  # send help message
     help_msg = ("Лучше один раз увидеть, чем сто раз услышать.\n"
                 "https://youtu.be/HV6Wm87D6_A")
     bot.reply_to(msg, help_msg)
@@ -174,7 +175,7 @@ def help_foo(msg):  # send help message
 
 
 @bot.message_handler(commands=['info'])
-def info(msg):  # send information message
+def info(msg: Message):  # send information message
     info_msg = (f"Каталог книг от {config.DB_DATE}\n"
                 "Связь с создателем проекта @kurbezz\n"
                 f"Версия бота {config.VERSION}\n"
@@ -185,7 +186,7 @@ def info(msg):  # send information message
 
 @bot.callback_query_handler(func=lambda x: re.search(r'b_([0-9])+', x.data) is not None)
 @timeit
-def search_by_title(callback):  # search books by title
+def search_by_title(callback: CallbackQuery):  # search books by title
     msg = callback.message
     user_sets = db.get_lang_settings(callback.from_user.id)
     books = lib.book_by_title(msg.reply_to_message.text, user_sets)
@@ -220,7 +221,7 @@ def search_by_title(callback):  # search books by title
 
 @bot.callback_query_handler(func=lambda x: re.search(r'ba_([0-9])+', x.data) is not None)
 @timeit
-def books_by_author(callback):  # search books by author (use callback query)
+def books_by_author(callback: CallbackQuery):  # search books by author (use callback query)
     msg = callback.message
     _, id_ = msg.reply_to_message.text.split('_')
     id_ = int(id_)
@@ -252,7 +253,7 @@ def books_by_author(callback):  # search books by author (use callback query)
 
 @bot.callback_query_handler(func=lambda x: re.search(r'a_([0-9])+', x.data) is not None)
 @timeit
-def search_by_authors(callback):  # search authors
+def search_by_authors(callback: CallbackQuery):  # search authors
     msg = callback.message
     authors = lib.author_by_name(msg.reply_to_message.text)
     _, page = callback.data.split('_')
@@ -281,7 +282,7 @@ def search_by_authors(callback):  # search authors
 
 @bot.message_handler(regexp='/a_([0-9])+')
 @timeit
-def books_by_author(msg):  # search books by author (use messages)
+def books_by_author(msg: Message):  # search books by author (use messages)
     _, id_ = msg.text.split('_')
     id_ = int(id_)
     user_sets = db.get_lang_settings(msg.from_user.id)
@@ -308,39 +309,39 @@ def books_by_author(msg):  # search books by author (use messages)
 
 
 @bot.message_handler(commands=['donate'])
-def donation(msg):  # send donation information
+def donation(msg: Message):  # send donation information
     text = "О том, как поддержать проект можно узнать "
     text += '<a href="http://telegra.ph/Pozhertvovaniya-02-11">тут</a>.'
     bot.reply_to(msg, text, parse_mode='HTML')
 
 
 @bot.message_handler(regexp='^/fb2_([0-9])+$')
-def send_fb2(message):  # fb2 books handler
+def send_fb2(message: Message):  # fb2 books handler
     return send_book(message, 'fb2')
 
 
 @bot.message_handler(regexp='^/epub_([0-9])+$')
-def send_epub(message):  # epub books handler
+def send_epub(message: Message):  # epub books handler
     return send_book(message, 'epub')
 
 
 @bot.message_handler(regexp='^/mobi_([0-9])+$')
-def send_mobi(message):  # mobi books handler
+def send_mobi(message: Message):  # mobi books handler
     return send_book(message, 'mobi')
 
 
 @bot.message_handler(regexp='^/djvu_([0-9])+$')
-def send_djvu(message):  # djvu books handler
+def send_djvu(message: Message):  # djvu books handler
     return send_book(message, 'djvu')
 
 
 @bot.message_handler(regexp='^/pdf_([0-9])+$')
-def send_pdf(message):  # pdf books handler
+def send_pdf(message: Message):  # pdf books handler
     return send_book(message, 'pdf')
 
 
 @bot.message_handler(regexp='^/doc_([0-9])+$')
-def send_doc(message):  # doc books handler
+def send_doc(message: Message):  # doc books handler
     return send_book(message, 'doc')
 
 
@@ -354,7 +355,6 @@ def send_by_file_id(foo):  # try to send document by file_id
             return foo(msg, type_, book_id=book_id, file_id=file_id)  # if file_id not found
         else:
             return foo(msg, type_, book_id=book_id)
-
     return try_send
 
 
@@ -387,8 +387,8 @@ def download(type_, book_id, msg):
 
 @timeit
 @send_by_file_id
-def send_book(msg, type_, book_id=None, file_id=None):  # download from flibusta server and send document to user
-    track(msg.from_user.id, msg, 'download')
+def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download from flibusta server and
+    track(msg.from_user.id, msg, 'download')                          # send document to user
     if not book_id:
         _, book_id = msg.text.split('_')
         book_id = int(book_id)
@@ -468,7 +468,7 @@ def send_book(msg, type_, book_id=None, file_id=None):  # download from flibusta
 
 @bot.inline_handler(func=lambda x: re.search(r'share_([0-9])+$', x.query) is not None)
 @timeit
-def inline_share(query):  # share book to others user with use inline query
+def inline_share(query: InlineQuery):  # share book to others user with use inline query
     track(query.from_user.id, query, 'share_book')
     _, book_id = query.query.split('_')
     result = list()
@@ -483,7 +483,7 @@ def inline_share(query):  # share book to others user with use inline query
 
 @bot.inline_handler(func=lambda query: query.query)
 @timeit
-def inline_hand(query):  # inline search
+def inline_hand(query: InlineQuery):  # inline search
     track(query.from_user.id, query, 'inline_search')
     user_sets = db.get_lang_settings(query.from_user.id)
     books = lib.book_by_title(query.query, user_sets)
@@ -503,10 +503,8 @@ def inline_hand(query):  # inline search
     bot.answer_inline_query(query.id, result)
 
 
-@bot.message_handler(commands=['settings'])
-def settings(msg):  # send settings message
-    user_set = db.get_lang_settings(msg.from_user.id)
-    text = 'Настройки: '
+def make_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    user_set = db.get_lang_settings(user_id)
     keyboard = InlineKeyboardMarkup()
     if user_set['allow_uk'] == 0:
         keyboard.row(InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
@@ -516,33 +514,29 @@ def settings(msg):  # send settings message
         keyboard.row(InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
     else:
         keyboard.row(InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
-    bot.reply_to(msg, text, reply_markup=keyboard)
+    return keyboard
+
+
+@bot.message_handler(commands=['settings'])
+def settings(msg: Message):  # send settings message
+    keyboard = make_settings_keyboard(msg.from_user.id)
+    bot.reply_to(msg, 'Настройки: ', reply_markup=keyboard)
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'^(uk|be)_(on|off)$', x.data) is not None)
-def lang_setup(query):  # language settings
+def lang_setup(query: CallbackQuery):  # language settings
     lang, set_ = query.data.split('_')
     if set_ == 'on':
         db.set_land_settings(query.from_user.id, lang, 1)
     else:
         db.set_land_settings(query.from_user.id, lang, 0)
-
-    keyboard = InlineKeyboardMarkup()
-    user_set = db.get_lang_settings(query.from_user.id)
-    if user_set['allow_uk'] == 0:
-        keyboard.row(InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
-    else:
-        keyboard.row(InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
-    if user_set['allow_be'] == 0:
-        keyboard.row(InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
-    else:
-        keyboard.row(InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
+    keyboard = make_settings_keyboard(query.from_user.id)
     bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
                                   reply_markup=keyboard)
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'updatelink_*', x.data) is not None)
-def update_file_link(query):
+def update_file_link(query: CallbackQuery):
     _, book_id, type_ = query.data.split('_')
     msg = query.message
     book_id = int(book_id)
@@ -585,7 +579,7 @@ def update_file_link(query):
 
 
 @bot.message_handler(func=lambda message: True)
-def search(msg):
+def search(msg: Message):
     track(msg.from_user.id, msg, 'receive_message')
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton('По названию', callback_data='b_1'),

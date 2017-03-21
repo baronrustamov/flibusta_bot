@@ -123,7 +123,8 @@ class Library:
         self.__connect()
 
     def __del__(self):
-        self.conn.close()
+        if self.conn:
+            self.conn.close()
 
     def __connect(self):
         while True:
