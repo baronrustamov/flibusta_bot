@@ -3,6 +3,7 @@ import time
 import datetime
 from typing import List
 from telebot import logger
+import mysql_class
 
 import config
 
@@ -125,49 +126,11 @@ def lang_filter(books: List[Book], lang_sets) -> List[Book]:
     return [book for book in books if book.lang in langs]
 
 
-class Library:
+class Library(mysql_class.MYSQLClass):
     def __init__(self):
-        self.conn = None
-        self.__connect()
-
-    def __del__(self):
-        if self.conn:
-            self.conn.close()
-
-    def __connect(self):
-        while True:
-            try:
-                self.conn = pymysql.connect(host=config.MYSQL_HOST,
-                                            database=config.MYSQL_DATABASE,
-                                            user=config.MYSQL_USER,
-                                            password=config.MYSQL_PASSWORD,
-                                            charset='utf8mb4')
-            except pymysql.Error as err:
-                logger.debug(err)
-            else:
-                return
-
-    def fetchone(self, sql, args):
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, args)
-                res = cursor.fetchone()
-            return res
-        except pymysql.Error as err:
-            logger.debug(err)
-            self.conn.ping(reconnect=True)
-            return None
-
-    def fetchall(self, sql, args):
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, args)
-                res = cursor.fetchall()
-            return res
-        except pymysql.Error as err:
-            logger.debug(err)
-            self.conn.ping(reconnect=True)
-            return None
+        super().__init__()
+        self.database = config.MYSQL_DATABASE
+        self._connect()
 
     def __add_author_info(self, books):
         result = []
@@ -178,7 +141,7 @@ class Library:
             )
         return result
 
-    def author_have_books(self, id_: int) -> int:
+    def author_books_count(self, id_: int) -> int:
         return self.fetchone(
             'SELECT count(*) FROM libavtor WHERE AvtorId=%s;', (id_,)
         )[0]

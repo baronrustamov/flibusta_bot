@@ -2,41 +2,20 @@ import pymysql
 import time
 import threading
 import os
+import mysql_class
 
 from telebot import logger
 import config
 
 
-
-class Controller(threading.Thread):
+class Controller(threading.Thread, mysql_class.MYSQLClass):
     def __init__(self):
         threading.Thread.__init__(self)
+        super(mysql_class.MYSQLClass).__init__()
+        self.database = config.MYSQL_DATABASE
         self.exit = threading.Event()
         self.conn = None
-        self.__connect()
-
-    def __connect(self):
-        while True:
-            try:
-                self.conn = pymysql.connect(host=config.MYSQL_HOST,
-                                            database=config.MYSQL_DATABASE,
-                                            user=config.MYSQL_USER,
-                                            password=config.MYSQL_PASSWORD,
-                                            charset='utf8mb4')
-            except pymysql.Error as err:
-                logger.debug(err)
-            else:
-                return
-
-    def fetchone(self, sql, args):
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, args)
-                res = cursor.fetchone()
-            return res
-        except pymysql.Error as err:
-            logger.debug(err)
-            return None
+        self._connect()
 
     def get_life_time(self, filename):
         life_time = self.fetchone('SELECT time FROM fileLifeTime WHERE filename=%s', (filename,))

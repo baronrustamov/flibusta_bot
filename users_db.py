@@ -1,45 +1,16 @@
 import pymysql
 from telebot import logger
+import mysql_class
 
 import config
 
 
-class Database:
+class Database(mysql_class.MYSQLClass):
     def __init__(self):
+        super().__init__()
+        self.database = config.USERS_DATABASE
         self.conn = None
-        self.__connect()
-
-    def __connect(self):
-        while True:
-            try:
-                self.conn = pymysql.connect(host=config.MYSQL_HOST,
-                                            database=config.USERS_DATABASE,
-                                            user=config.MYSQL_USER,
-                                            password=config.MYSQL_PASSWORD)
-            except pymysql.Error as err:
-                logger.debug(err)
-            else:
-                return
-
-    def fetchone(self, sql, args):
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, args)
-                return cursor.fetchone()
-        except pymysql.Error as err:
-            logger.debug(err)
-            self.conn.ping(reconnect=True)
-            return None
-
-    def fetchall(self, sql, args):
-        try:
-            with self.conn.cursor() as cursor:
-                cursor.execute(sql, args)
-                return cursor.fetchall()
-        except pymysql.Error as err:
-            logger.debug(err)
-            self.conn.ping(reconnect=True)
-            return None
+        self._connect()
 
     def __create_lang_settings(self, user_id):
         try:
