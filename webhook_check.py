@@ -18,7 +18,7 @@ class Checker(threading.Thread):
             if self.exit.is_set():
                 break
             self.check()
-            self.exit.wait(90)
+            self.exit.wait(300)
 
     def check(self):
         webhook = get_webhook_info(config.TOKEN)

@@ -268,7 +268,7 @@ def search_by_authors(callback: CallbackQuery):  # search authors
     else:
         page_max = len(authors) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
-    for author in authors:
+    for author in authors[ELEMENTS_ON_PAGE * (page - 1):ELEMENTS_ON_PAGE * page]:
         msg_text += author.to_send
     msg_text += f'<code>Страница {page}/{page_max}</code>'
     keyboard = get_keyboard(page, page_max, 'a')
@@ -441,6 +441,7 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
             logger.debug(err)
         else:
             lib.set_file_id(book_id, res.document.file_id, type_)
+        finally:
             try:
                 os.remove(filename)
             except FileNotFoundError:
@@ -448,7 +449,11 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
             return
     try:
         shutil.move(filename, './ftp')
-    except shutil.Error:  # todo: удаление файла в главной папке
+    except shutil.Error:
+        try:
+            os.remove(filename)
+        except FileNotFoundError:
+            pass
         lib.update_life_time(filename)
     else:
         lib.set_life_time(filename)

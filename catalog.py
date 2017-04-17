@@ -13,6 +13,7 @@ class Author:
         self.last_name = last_name
         self.first_name = first_name
         self.middle_name = middle_name
+        self.books_count = None
 
     @property
     def normal_name(self) -> str:
@@ -103,9 +104,16 @@ def for_search(arg: str) -> str:
 
 def sort_by_alphabet(obj: Book) -> str:
     if obj.title:
-        return obj.title.strip('«').strip('»')
+        return obj.title.replace('«', '').replace('»', '').replace('"', '')
     else:
         return ''
+
+
+def sort_by_books_count(obj: Author) -> int:
+    if obj.books_count:
+        return obj.books_count
+    else:
+        return 0
 
 
 def lang_filter(books: List[Book], lang_sets) -> List[Book]:
@@ -161,15 +169,6 @@ class Library:
             self.conn.ping(reconnect=True)
             return None
 
-    def good_author_id(self, id_):
-        result = self.fetchall(
-            "SELECT * FROM libavtoraliase WHERE BadId=%s;", (id_,)
-        )
-        if result:
-            return False
-        else:
-            return True
-
     def __add_author_info(self, books):
         result = []
         for book in books:
@@ -179,19 +178,10 @@ class Library:
             )
         return result
 
-    def __filter_authors(self, authors):
-        result = []
-        for author in authors:
-            if self.good_author_id(author[0]):
-                result.append(
-                    Author(*author)
-                )
-        return result
-
-    def author_have_books(self, id_):
-        return self.fetchone('SELECT count(*) FROM libavtor WHERE AvtorId=%s;',
-                             (id_,)
-                             )
+    def author_have_books(self, id_: int) -> int:
+        return self.fetchone(
+            'SELECT count(*) FROM libavtor WHERE AvtorId=%s;', (id_,)
+        )[0]
 
     def author_by_id(self, id_):
         author_id = self.fetchone("SELECT AvtorId FROM libavtor WHERE BookId=%s;", (id_,))
@@ -251,13 +241,14 @@ class Library:
                              "AGAINST (%s IN BOOLEAN MODE)"), (for_search(author),)
                             )
         if row:
-            authors = self.__filter_authors(row)
-            res = []
-            for author in authors:
-                if self.author_have_books(author.id):
-                    res.append(author)
+            res = []  # type: List[Author]
+            for author in row:
+                if self.author_books_count(author[0]):
+                    res.append(Author(*author))
             if res:
-                return res
+                for a in res:
+                    a.books_count = self.author_books_count(a.id)
+                return sorted(res, key=sort_by_books_count, reverse=True)
         return None
 
     def get_file_id(self, book_id, type_):
