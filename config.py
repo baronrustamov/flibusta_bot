@@ -20,8 +20,8 @@ WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}:{WEBHOOK_PORT}"
 WEBHOOK_URL_PATH = f"/{TOKEN}/"
 
 # info
-VERSION = "2.4.19"
-DB_DATE = "18.02.2017"
+VERSION = "2.4.20"
+DB_DATE = "08.05.2017"
 
 
 # database
