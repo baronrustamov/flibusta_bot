@@ -188,20 +188,21 @@ def info(msg: Message):  # send information message
 @timeit
 def search_by_title(callback: CallbackQuery):  # search books by title
     msg = callback.message
+    if len(msg.reply_to_message.text) < 4:
+        bot.edit_message_text('Слишком короткий запрос!', chat_id=msg.chat.id, message_id=msg.message_id)
     user_sets = db.get_lang_settings(callback.from_user.id)
     books = lib.book_by_title(msg.reply_to_message.text, user_sets)
-    try:
-        _, page = callback.data.split('_')
-    except ValueError as err:
-        print(f"{time.strftime('%H:%M:%S')} {err} | ", end='')
-        print('Callback.data = ' + callback.data)
-        return
-    page = int(page)
-    if not books:
+    if books is None:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
     bot.send_chat_action(msg.chat.id, 'typing')
+    try:
+        _, page = callback.data.split('_')
+    except ValueError as err:
+        logger.debug(err)
+        return
+    page = int(page)
     if len(books) % ELEMENTS_ON_PAGE == 0:
         page_max = len(books) // ELEMENTS_ON_PAGE
     else:
@@ -225,14 +226,14 @@ def books_by_author(callback: CallbackQuery):  # search books by author (use cal
     msg = callback.message
     _, id_ = msg.reply_to_message.text.split('_')
     id_ = int(id_)
-    _, page = callback.data.split('_')
-    page = int(page)
     user_sets = db.get_lang_settings(callback.from_user.id)
     books = lib.book_by_author(id_, user_sets)
-    if not books:
+    if books is None:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
+    _, page = callback.data.split('_')
+    page = int(page)
     bot.send_chat_action(msg.chat.id, 'typing')
     if len(books) % ELEMENTS_ON_PAGE == 0:
         page_max = len(books) // ELEMENTS_ON_PAGE
@@ -256,12 +257,12 @@ def books_by_author(callback: CallbackQuery):  # search books by author (use cal
 def search_by_authors(callback: CallbackQuery):  # search authors
     msg = callback.message
     authors = lib.author_by_name(msg.reply_to_message.text)
-    _, page = callback.data.split('_')
-    page = int(page)
-    if not authors:
+    if authors is None:
         bot.send_message(msg.chat.id, 'Автор не найден!')
         track(msg.from_user.id, callback, 'search_by_authors')
         return
+    _, page = callback.data.split('_')
+    page = int(page)
     bot.send_chat_action(msg.chat.id, 'typing')
     if len(authors) % ELEMENTS_ON_PAGE == 0:
         page_max = len(authors) // ELEMENTS_ON_PAGE
@@ -287,7 +288,7 @@ def books_by_author(msg: Message):  # search books by author (use messages)
     id_ = int(id_)
     user_sets = db.get_lang_settings(msg.from_user.id)
     books = lib.book_by_author(id_, user_sets)
-    if not books:
+    if books is None:
         bot.reply_to(msg, 'Ошибка! Книги не найдены!')
         track(msg.from_user.id, msg, 'books_by_author')
         return
@@ -389,11 +390,11 @@ def download(type_, book_id, msg):
 @send_by_file_id
 def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download from flibusta server and
     track(msg.from_user.id, msg, 'download')                          # send document to user
-    if not book_id:
+    if book_id is None:
         _, book_id = msg.text.split('_')
         book_id = int(book_id)
     book = lib.book_by_id(book_id)
-    if not book:
+    if book is None:
         bot.reply_to(msg, 'Книга не найдена!')
         return
     caption = ''
@@ -414,7 +415,7 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
         else:
             return
     r = download(type_, book_id, msg)
-    if not r:
+    if r is None:
         return
     bot.send_chat_action(msg.chat.id, 'upload_document')
     filename = normalize(book, type_)
@@ -459,7 +460,7 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
         lib.set_life_time(filename)
 
     life_time = lib.get_life_time(filename)
-    if not life_time:  # todo: сообщение об ошибке
+    if life_time is None:  # todo: сообщение об ошибке
         return
     text = 'Не могу загрузить сюда файл, но у меня есть ссылка для скачивания: \n'
     text += f'📎  <a href="http://35.164.29.201/ftp/download.php?filename={filename}">Скачать</a>\n'
@@ -478,7 +479,7 @@ def inline_share(query: InlineQuery):  # share book to others user with use inli
     _, book_id = query.query.split('_')
     result = list()
     book = lib.book_by_id(book_id)
-    if not book:
+    if book is None:
         return
     result.append(InlineQueryResultArticle('1', 'Поделиться',
                                            InputTextMessageContent(book.to_share, parse_mode='HTML',
@@ -492,7 +493,7 @@ def inline_hand(query: InlineQuery):  # inline search
     track(query.from_user.id, query, 'inline_search')
     user_sets = db.get_lang_settings(query.from_user.id)
     books = lib.book_by_title(query.query, user_sets)
-    if not books:
+    if books is None:
         bot.answer_inline_query(query.id, [InlineQueryResultArticle(
             '1', 'Книги не найдены!', InputTextMessageContent('Книги не найдены!')
         )]
@@ -630,10 +631,13 @@ if config.WEBHOOK:
 
     checker.start()
 
-    app.run(host=config.WEBHOOK_LISTEN,
-            port=config.WEBHOOK_PORT,
-            ssl_context=(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV),
-            debug=config.DEBUG)
+    try:
+        app.run(host=config.WEBHOOK_LISTEN,
+                port=config.WEBHOOK_PORT,
+                ssl_context=(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV),
+                debug=config.DEBUG)
+    except KeyboardInterrupt:
+        pass
 
     checker.stop()
 
