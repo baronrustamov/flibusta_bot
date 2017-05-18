@@ -381,7 +381,7 @@ def download(type_, book_id, msg):
             bot.reply_to(msg, "Ошибка подключения к серверу! Попробуйте позднее.")
             return None
     if '<!DOCTYPE html' in str(r.content[:100]) or '<html>' in str(r.content[:100]):  # send message to user when get
-        bot.reply_to(msg, 'Ошибка!')  # html file
+        bot.reply_to(msg, "Ошибка! Попробуйте через пару минут :(")  # html file
         return None
     return r
 
