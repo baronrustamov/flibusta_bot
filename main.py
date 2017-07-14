@@ -14,25 +14,25 @@ import time
 import logging
 import requests
 import shutil
+import ssl
 
 # yandex metric lib
 import botan
 
 # bot's modules and config files
 import config
-from catalog import Library, Book
+from library import books_by_title, books_by_author, authors_by_name, book_by_id, to_send_book, to_share_book, \
+    get_file_id, set_file_id, author_by_id
+from pony_tables import Book
 from debug_utils import timeit
-from users_db import Database
-from ftp_file_controller import Controller
+from users_db import get_user, set_lang_settings
 from webhook_check import Checker
 
 # bot's consts
 ELEMENTS_ON_PAGE = 7
 BOOKS_CHANGER = 5
 
-bot = telebot.TeleBot(config.TOKEN)
-lib = Library()
-db = Database()
+bot = telebot.AsyncTeleBot(config.TOKEN)
 
 logger = telebot.logger
 
@@ -85,9 +85,10 @@ def track(uid, msg, name):  # botan tracker
 
 def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept in Telegram Bot API
     filename = ''
-    if book.author:
-        if book.author.short:
-            filename += book.author.short + '_-_'
+    author = author_by_id(book.id)
+    if author:
+        if author.short:
+            filename += author.short + '_-_'
     filename += book.title
     filename = transliterate.translit(filename, 'ru', reversed=True)
     filename = filename.replace('(', '').replace(')', '').replace(',', '').replace('…', '').replace('.', '')
@@ -151,27 +152,30 @@ def start(msg: Message):
                      "Информация о боте /info.\n"
                      "Оставить отзыв /vote.\n"
                      "Материальная помощь /donate.\n")
-        bot.reply_to(msg, start_msg)
+        r = bot.reply_to(msg, start_msg)
         track(msg.from_user.id, msg, 'start')
+        r.wait()
     else:
         type_, id_ = rq.split('_')
-        send_book(msg, type_, book_id=int(id_))
+        bot_send_book(msg, type_, book_id=int(id_))
         track(msg.from_user.id, msg, 'get_shared_book')
 
 
 @bot.message_handler(commands=['vote'])
 def vote_foo(msg: Message):  # send vote link
     vote_msg = "https://t.me/storebot?start=flibusta_rebot"
-    bot.reply_to(msg, vote_msg)
+    r = bot.reply_to(msg, vote_msg)
     track(msg.from_user.id, msg, 'vote')
+    r.wait()
 
 
 @bot.message_handler(commands=['help'])
 def help_foo(msg: Message):  # send help message
     help_msg = ("Лучше один раз увидеть, чем сто раз услышать.\n"
                 "https://youtu.be/HV6Wm87D6_A")
-    bot.reply_to(msg, help_msg)
+    r = bot.reply_to(msg, help_msg)
     track(msg.from_user.id, msg, 'help')
+    r.wait()
 
 
 @bot.message_handler(commands=['info'])
@@ -180,23 +184,24 @@ def info(msg: Message):  # send information message
                 "Связь с создателем проекта @kurbezz\n"
                 f"Версия бота {config.VERSION}\n"
                 "Github: https://goo.gl/V0Iw7m")
-    bot.reply_to(msg, info_msg, disable_web_page_preview=True)
+    r = bot.reply_to(msg, info_msg, disable_web_page_preview=True)
     track(msg.from_user.id, msg, 'info')
+    r.wait()
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'b_([0-9])+', x.data) is not None)
 @timeit
-def search_by_title(callback: CallbackQuery):  # search books by title
+def bot_search_by_title(callback: CallbackQuery):  # search books by title
     msg = callback.message
     if len(msg.reply_to_message.text) < 4:
         bot.edit_message_text('Слишком короткий запрос!', chat_id=msg.chat.id, message_id=msg.message_id)
-    user_sets = db.get_lang_settings(callback.from_user.id)
-    books = lib.book_by_title(msg.reply_to_message.text, user_sets)
+    user = get_user(callback.from_user.id)
+    books = books_by_title(msg.reply_to_message.text, user)
     if books is None:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
-    bot.send_chat_action(msg.chat.id, 'typing')
+    r_action = bot.send_chat_action(msg.chat.id, 'typing')
     try:
         _, page = callback.data.split('_')
     except ValueError as err:
@@ -209,61 +214,66 @@ def search_by_title(callback: CallbackQuery):  # search books by title
         page_max = len(books) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
     for book in books[ELEMENTS_ON_PAGE * (page - 1):ELEMENTS_ON_PAGE * page]:
-        msg_text += book.to_send
+        msg_text += to_send_book(book)
     msg_text += f'<code>Страница {page}/{page_max}</code>'
     keyboard = get_keyboard(page, page_max, 'b')
     if keyboard:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
-                              reply_markup=keyboard)
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
+                                  reply_markup=keyboard)
     else:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
     track(msg.from_user.id, callback, 'search_by_title')
+    r_action.wait()
+    r.wait()
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'ba_([0-9])+', x.data) is not None)
 @timeit
-def books_by_author(callback: CallbackQuery):  # search books by author (use callback query)
+def bot_books_by_author(callback: CallbackQuery):  # search books by author (use callback query)
     msg = callback.message
     _, id_ = msg.reply_to_message.text.split('_')
     id_ = int(id_)
-    user_sets = db.get_lang_settings(callback.from_user.id)
-    books = lib.book_by_author(id_, user_sets)
+    user = get_user(callback.from_user.id)
+    books = books_by_author(id_, user)
     if books is None:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
     _, page = callback.data.split('_')
     page = int(page)
-    bot.send_chat_action(msg.chat.id, 'typing')
+    r_action = bot.send_chat_action(msg.chat.id, 'typing')
     if len(books) % ELEMENTS_ON_PAGE == 0:
         page_max = len(books) // ELEMENTS_ON_PAGE
     else:
         page_max = len(books) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
     for book in books[ELEMENTS_ON_PAGE * (page - 1):ELEMENTS_ON_PAGE * page]:
-        msg_text += book.to_send
+        msg_text += to_send_book(book)
     msg_text += f'<code>Страница {page}/{page_max}</code>'
     keyboard = get_keyboard(page, page_max, 'ba')
     if keyboard:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
-                              reply_markup=keyboard)
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
+                                  reply_markup=keyboard)
     else:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
     track(msg.from_user.id, callback, 'books_by_author')
+    r_action.wait()
+    r.wait()
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'a_([0-9])+', x.data) is not None)
 @timeit
-def search_by_authors(callback: CallbackQuery):  # search authors
+def bot_search_by_authors(callback: CallbackQuery):  # search authors
     msg = callback.message
-    authors = lib.author_by_name(msg.reply_to_message.text)
+    authors = authors_by_name(msg.reply_to_message.text)
     if authors is None:
-        bot.send_message(msg.chat.id, 'Автор не найден!')
+        r = bot.send_message(msg.chat.id, 'Автор не найден!')
         track(msg.from_user.id, callback, 'search_by_authors')
+        r.wait()
         return
     _, page = callback.data.split('_')
     page = int(page)
-    bot.send_chat_action(msg.chat.id, 'typing')
+    r_action = bot.send_chat_action(msg.chat.id, 'typing')
     if len(authors) % ELEMENTS_ON_PAGE == 0:
         page_max = len(authors) // ELEMENTS_ON_PAGE
     else:
@@ -274,76 +284,81 @@ def search_by_authors(callback: CallbackQuery):  # search authors
     msg_text += f'<code>Страница {page}/{page_max}</code>'
     keyboard = get_keyboard(page, page_max, 'a')
     if keyboard:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
-                              reply_markup=keyboard)
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML',
+                                  reply_markup=keyboard)
     else:
-        bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
+        r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
     track(msg.from_user.id, callback, 'search_by_authors')
+    r_action.wait()
+    r.wait()
 
 
 @bot.message_handler(regexp='/a_([0-9])+')
 @timeit
-def books_by_author(msg: Message):  # search books by author (use messages)
+def bot_books_by_author(msg: Message):  # search books by author (use messages)
     _, id_ = msg.text.split('_')
     id_ = int(id_)
-    user_sets = db.get_lang_settings(msg.from_user.id)
-    books = lib.book_by_author(id_, user_sets)
+    user = get_user(msg.from_user.id)
+    books = books_by_author(id_, user)
     if books is None:
-        bot.reply_to(msg, 'Ошибка! Книги не найдены!')
+        r = bot.reply_to(msg, 'Ошибка! Книги не найдены!')
         track(msg.from_user.id, msg, 'books_by_author')
+        r.wait()
         return
-    bot.send_chat_action(msg.chat.id, 'typing')
+    r_action = bot.send_chat_action(msg.chat.id, 'typing')
     if len(books) % ELEMENTS_ON_PAGE == 0:
         page_max = len(books) // ELEMENTS_ON_PAGE
     else:
         page_max = len(books) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
     for book in books[0:ELEMENTS_ON_PAGE]:
-        msg_text += book.to_send
+        msg_text += to_send_book(book)
     msg_text += f'<code>Страница {1}/{page_max}</code>'
     keyboard = get_keyboard(1, page_max, 'ba')
     if keyboard:
-        bot.reply_to(msg, msg_text, parse_mode='HTML', reply_markup=keyboard)
+        r = bot.reply_to(msg, msg_text, parse_mode='HTML', reply_markup=keyboard)
     else:
-        bot.reply_to(msg, msg_text, parse_mode='HTML')
+        r = bot.reply_to(msg, msg_text, parse_mode='HTML')
     track(msg.from_user.id, msg, 'books_by_author')
+    r_action.wait()
+    r.wait()
 
 
 @bot.message_handler(commands=['donate'])
 def donation(msg: Message):  # send donation information
     text = "О том, как поддержать проект можно узнать "
     text += '<a href="http://telegra.ph/Pozhertvovaniya-02-11">тут</a>.'
-    bot.reply_to(msg, text, parse_mode='HTML')
+    bot.reply_to(msg, text, parse_mode='HTML').wait()
 
 
 @bot.message_handler(regexp='^/fb2_([0-9])+$')
 def send_fb2(message: Message):  # fb2 books handler
-    return send_book(message, 'fb2')
+    return bot_send_book(message, 'fb2')
 
 
 @bot.message_handler(regexp='^/epub_([0-9])+$')
 def send_epub(message: Message):  # epub books handler
-    return send_book(message, 'epub')
+    return bot_send_book(message, 'epub')
 
 
 @bot.message_handler(regexp='^/mobi_([0-9])+$')
 def send_mobi(message: Message):  # mobi books handler
-    return send_book(message, 'mobi')
+    return bot_send_book(message, 'mobi')
 
 
 @bot.message_handler(regexp='^/djvu_([0-9])+$')
 def send_djvu(message: Message):  # djvu books handler
-    return send_book(message, 'djvu')
+    return bot_send_book(message, 'djvu')
 
 
 @bot.message_handler(regexp='^/pdf_([0-9])+$')
 def send_pdf(message: Message):  # pdf books handler
-    return send_book(message, 'pdf')
+    return bot_send_book(message, 'pdf')
 
 
 @bot.message_handler(regexp='^/doc_([0-9])+$')
 def send_doc(message: Message):  # doc books handler
-    return send_book(message, 'doc')
+    return bot_send_book(message, 'doc')
 
 
 def send_by_file_id(foo):  # try to send document by file_id
@@ -351,9 +366,9 @@ def send_by_file_id(foo):  # try to send document by file_id
         if not book_id:
             _, book_id = msg.text.split('_')
             book_id = int(book_id)
-        file_id = lib.get_file_id(book_id, type_)  # try to get file_id from BD
+        file_id = get_file_id(book_id, type_)  # try to get file_id from BD
         if file_id:
-            return foo(msg, type_, book_id=book_id, file_id=file_id)  # if file_id not found
+            return foo(msg, type_, book_id=book_id, file_id=file_id.file_id)  # if file_id not found
         else:
             return foo(msg, type_, book_id=book_id)
     return try_send
@@ -377,30 +392,31 @@ def download(type_, book_id, msg):
                 r = requests.get(f"http://flibustahezeous3.onion/b/{book_id}/download",
                                  proxies=config.PROXIES)
         except requests.exceptions.ConnectionError as err:
-            telebot.logger.exception(err)
-            bot.reply_to(msg, "Ошибка подключения к серверу! Попробуйте позднее.")
+            logger.debug(err)
+            bot.reply_to(msg, "Ошибка подключения к серверу! Попробуйте позднее.").wait()
             return None
     if '<!DOCTYPE html' in str(r.content[:100]) or '<html>' in str(r.content[:100]):  # send message to user when get
-        bot.reply_to(msg, "Ошибка! Попробуйте через пару минут :(")  # html file
+        bot.reply_to(msg, "Ошибка! Попробуйте через пару минут :(").wait()  # html file
         return None
     return r
 
 
 @timeit
 @send_by_file_id
-def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download from flibusta server and
-    track(msg.from_user.id, msg, 'download')                          # send document to user
+def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download from flibusta server and
+    track(msg.from_user.id, msg, 'download')  # send document to user
     if book_id is None:
         _, book_id = msg.text.split('_')
         book_id = int(book_id)
-    book = lib.book_by_id(book_id)
+    book = book_by_id(book_id)
     if book is None:
-        bot.reply_to(msg, 'Книга не найдена!')
+        bot.reply_to(msg, 'Книга не найдена!').wait()
         return
     caption = ''
-    if book.author:
-        if book.author.short:
-            caption += book.author.normal_name
+    author = author_by_id(book.id)
+    if author:
+        if author.short:
+            caption += author.normal_name
     caption += '\n' + book.title
     markup = InlineKeyboardMarkup()
     markup.row(
@@ -409,7 +425,7 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
     if file_id:
         try:
             bot.send_document(msg.chat.id, file_id, reply_to_message_id=msg.message_id,
-                              caption=caption, reply_markup=markup)
+                              caption=caption, reply_markup=markup).wait()
         except Exception as err:
             logger.debug(err)
         else:
@@ -417,7 +433,7 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
     r = download(type_, book_id, msg)
     if r is None:
         return
-    bot.send_chat_action(msg.chat.id, 'upload_document')
+    r_action = bot.send_chat_action(msg.chat.id, 'upload_document')
     filename = normalize(book, type_)
     with open(filename, 'wb') as f:
         f.write(r.content)
@@ -433,90 +449,63 @@ def send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download
         zip_obj.close()
         os.rename(extracted, filename)
         os.remove(filename.replace('.fb2', '.zip'))
-    file_size = lib.get_file_size(book_id)
-    if file_size < 50 * 1024 * 1024:
-        try:
-            res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
-                                    caption=caption, reply_markup=markup)
-        except requests.ConnectionError as err:
-            logger.debug(err)
-        else:
-            lib.set_file_id(book_id, res.document.file_id, type_)
-        finally:
-            try:
-                os.remove(filename)
-            except FileNotFoundError:
-                pass
-            return
     try:
-        shutil.move(filename, './ftp')
-    except shutil.Error:
-        try:
-            os.remove(filename)
-        except FileNotFoundError:
-            pass
-        lib.update_life_time(filename)
+        res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
+                                caption=caption, reply_markup=markup).wait()
+    except requests.ConnectionError as err:
+        logger.debug(err)
     else:
-        lib.set_life_time(filename)
-
-    life_time = lib.get_life_time(filename)
-    if life_time is None:  # todo: сообщение об ошибке
-        return
-    text = 'Не могу загрузить сюда файл, но у меня есть ссылка для скачивания: \n'
-    text += f'📎  <a href="http://35.164.29.201/ftp/download.php?filename={filename}">Скачать</a>\n'
-    text += 'Ссылка будет доступна 3 часа ( начиная с ' + time.strftime("%H:%M") + ' MSK)'
-
-    keyboard = InlineKeyboardMarkup().row(
-        InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
-    )
-    bot.reply_to(msg, text, parse_mode='HTML', reply_markup=keyboard)
+        set_file_id(book_id, type_, res.document.file_id)
+    finally:
+        os.remove(filename)
+    r_action.wait()
 
 
 @bot.inline_handler(func=lambda x: re.search(r'share_([0-9])+$', x.query) is not None)
 @timeit
-def inline_share(query: InlineQuery):  # share book to others user with use inline query
+def bot_inline_share(query: InlineQuery):  # share book to others user with use inline query
     track(query.from_user.id, query, 'share_book')
     _, book_id = query.query.split('_')
-    result = list()
-    book = lib.book_by_id(book_id)
+    result = []
+    book = book_by_id(book_id)
     if book is None:
         return
     result.append(InlineQueryResultArticle('1', 'Поделиться',
-                                           InputTextMessageContent(book.to_share, parse_mode='HTML',
+                                           InputTextMessageContent(to_share_book(book), parse_mode='HTML',
                                                                    disable_web_page_preview=True), ))
-    bot.answer_inline_query(query.id, result)
+    bot.answer_inline_query(query.id, result).wait()
 
 
 @bot.inline_handler(func=lambda query: query.query)
 @timeit
-def inline_hand(query: InlineQuery):  # inline search
+def bot_inline_hand(query: InlineQuery):  # inline search
     track(query.from_user.id, query, 'inline_search')
-    user_sets = db.get_lang_settings(query.from_user.id)
-    books = lib.book_by_title(query.query, user_sets)
+    user = get_user(query.from_user.id)
+    books = books_by_title(query.query, user)
     if books is None:
         bot.answer_inline_query(query.id, [InlineQueryResultArticle(
             '1', 'Книги не найдены!', InputTextMessageContent('Книги не найдены!')
         )]
-                                )
+                                ).wait()
         return
     book_index = 1
     result = list()
     for book in books[0:min(len(books) - 1, 50 - 1)]:
         result.append(InlineQueryResultArticle(str(book_index), book.title,
-                                               InputTextMessageContent(book.to_share, parse_mode='HTML',
+                                               InputTextMessageContent(to_share_book(book), parse_mode='HTML',
                                                                        disable_web_page_preview=True)))
         book_index += 1
-    bot.answer_inline_query(query.id, result)
+    bot.answer_inline_query(query.id, result).wait()
 
 
 def make_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    user_set = db.get_lang_settings(user_id)
+    user = get_user(user_id)
     keyboard = InlineKeyboardMarkup()
-    if user_set['allow_uk'] == 0:
+    if not user.allow_uk:
         keyboard.row(InlineKeyboardButton('Украинский: 🅾 выключен!', callback_data='uk_on'))
     else:
         keyboard.row(InlineKeyboardButton('Украинский: ✅ включен!', callback_data='uk_off'))
-    if user_set['allow_be'] == 0:
+    if not user.allow_be:
         keyboard.row(InlineKeyboardButton('Белорусский: 🅾 выключен!', callback_data='be_on'))
     else:
         keyboard.row(InlineKeyboardButton('Белорусский: ✅ включен!', callback_data='be_off'))
@@ -526,116 +515,67 @@ def make_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
 @bot.message_handler(commands=['settings'])
 def settings(msg: Message):  # send settings message
     keyboard = make_settings_keyboard(msg.from_user.id)
-    bot.reply_to(msg, 'Настройки: ', reply_markup=keyboard)
+    bot.reply_to(msg, 'Настройки: ', reply_markup=keyboard).wait()
 
 
 @bot.callback_query_handler(func=lambda x: re.search(r'^(uk|be)_(on|off)$', x.data) is not None)
 def lang_setup(query: CallbackQuery):  # language settings
     lang, set_ = query.data.split('_')
     if set_ == 'on':
-        db.set_land_settings(query.from_user.id, lang, 1)
+        set_lang_settings(query.from_user.id, lang, True)
     else:
-        db.set_land_settings(query.from_user.id, lang, 0)
+        set_lang_settings(query.from_user.id, lang, False)
     keyboard = make_settings_keyboard(query.from_user.id)
     bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
-                                  reply_markup=keyboard)
-
-
-@bot.callback_query_handler(func=lambda x: re.search(r'updatelink_*', x.data) is not None)
-def update_file_link(query: CallbackQuery):
-    _, book_id, type_ = query.data.split('_')
-    msg = query.message
-    book_id = int(book_id)
-    book = lib.book_by_id(book_id)
-    filename = normalize(book, type_)
-    lib.set_life_time(filename)
-
-    if filename not in os.listdir(config.FTP_DIR):
-        r = download(type_, book_id, msg)
-        if not r:
-            return
-        with open(filename, 'wb') as f:
-            f.write(r.content)
-        if type_ == 'fb2':
-            os.rename(filename, filename.replace('.fb2', '.zip'))
-            try:
-                zip_obj = zipfile.ZipFile(filename.replace('.fb2', '.zip'))
-            except zipfile.BadZipFile as err:
-                logger.debug(err)
-                return
-            extracted = zip_obj.namelist()[0]
-            zip_obj.extract(extracted)
-            zip_obj.close()
-            os.rename(extracted, filename)
-            os.remove(filename.replace('.fb2', '.zip'))
-
-            shutil.move(filename, './ftp')
-
-    text = 'Не могу загрузить сюда файл, но у меня есть ссылка для скачивания: \n'
-    text += f'📎  <a href="http://35.164.29.201/ftp/download.php?filename={filename}">Скачать</a>\n'
-    text += 'Ссылка будет доступна 3 часа (начиная с ' + time.strftime("%H:%M") + ' MSK)'
-
-    keyboard = InlineKeyboardMarkup().row(
-        InlineKeyboardButton('Обновить ссылку', callback_data=f'updatelink_{book_id}_{type_}')
-    )
-
-    bot.edit_message_text(text, chat_id=msg.chat.id, message_id=msg.message_id,
-                          reply_markup=keyboard, parse_mode='HTML')
-    track(msg.from_user.id, query, 'search_by_authors')
+                                  reply_markup=keyboard).wait()
 
 
 @bot.message_handler(func=lambda message: True)
 def search(msg: Message):
-    track(msg.from_user.id, msg, 'receive_message')
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton('По названию', callback_data='b_1'),
                  InlineKeyboardButton('По авторам', callback_data='a_1')
                  )
-    bot.reply_to(msg, 'Поиск: ', reply_markup=keyboard)
+    r = bot.reply_to(msg, 'Поиск: ', reply_markup=keyboard)
+    track(msg.from_user.id, msg, 'receive_message')
+    r.wait()
 
 
-ftp = Controller()
-ftp.start()
+bot.remove_webhook()
 
 if config.WEBHOOK:
-    import flask
+    from aiohttp import web
 
-    app = flask.Flask(__name__)
+    app = web.Application()
 
     checker = Checker(bot)
 
 
-    @app.route('/', methods=['GET', 'POST'])
-    def index():
-        return ''
-
-
-    @app.route(config.WEBHOOK_URL_PATH, methods=['POST'])
-    def webhook():
-        if flask.request.headers.get('content-type') == 'application/json':
-            json_string = flask.request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_string)
+    async def handle(request):
+        if request.match_info.get('token') == config.TOKEN:
+            request_body_dict = await request.json()
+            update = telebot.types.Update.de_json(request_body_dict)
             bot.process_new_updates([update])
-            checker.update()
-            return ''
+            return web.Response()
         else:
-            flask.abort(403)
+            return web.Response(status=403)
 
 
-    bot.remove_webhook()
-
-    time.sleep(0.3)
+    app.router.add_post('/{token}/', handle)
 
     bot.set_webhook(url=config.WEBHOOK_URL_BASE + config.WEBHOOK_URL_PATH,
                     certificate=open(config.WEBHOOK_SSL_CERT, 'r'))
 
     checker.start()
 
+    context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+    context.load_cert_chain(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV)
+
     try:
-        app.run(host=config.WEBHOOK_LISTEN,
-                port=config.WEBHOOK_PORT,
-                ssl_context=(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV),
-                debug=config.DEBUG)
+        web.run_app(app,
+                    host=config.WEBHOOK_LISTEN,
+                    port=config.WEBHOOK_PORT,
+                    ssl_context=context)
     except KeyboardInterrupt:
         pass
 
@@ -644,5 +584,3 @@ if config.WEBHOOK:
     bot.remove_webhook()
 else:
     bot.polling()
-
-ftp.stop()

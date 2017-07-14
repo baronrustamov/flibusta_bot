@@ -20,18 +20,15 @@ WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}:{WEBHOOK_PORT}"
 WEBHOOK_URL_PATH = f"/{TOKEN}/"
 
 # info
-VERSION = "2.4.22"
-DB_DATE = "08.05.2017"
+VERSION = "2.5.0"
+DB_DATE = "12.07.2017"
 
 
 # database
 MYSQL_HOST = 'localhost'
-MYSQL_DATABASE = 'flibusta'
 MYSQL_USER = ''
 MYSQL_PASSWORD = ''
-
-
-# users database
+LIB_DATABASE = 'flibusta'
 USERS_DATABASE = 'flibusta_users'
 
 

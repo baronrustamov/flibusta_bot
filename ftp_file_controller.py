@@ -2,7 +2,6 @@ import pymysql
 import time
 import threading
 import os
-import mysql_class
 
 from telebot import logger
 import config
