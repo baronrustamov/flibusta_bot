@@ -11,4 +11,11 @@
 * Inline-поиск
 
 ## Скриншоты
-![](/pics/screenshot_1.jpg =250px) ![](/pics/screenshot_2.jpg =250px) ![](/pics/screenshot_3.jpg =250px) ![](/pics/screenshot_4.jpg =250px) ![](/pics/screenshot_5.jpg  =250px) ![](/pics/screenshot_6.jpg =250px) ![](/pics/screenshot_7.jpg =250px) ![](/pics/screenshot_8.jpg =250px) ![](/pics/screenshot_9.jpg =250px) ![](/pics/screenshot_10.jpg =250px)
+
+
+| ![](/pics/screenshot_1.jpg) | ![](/pics/screenshot_2.jpg) | ![](/pics/screenshot_3.jpg) |
+|-|-|-|-|
+| ![](/pics/screenshot_4.jpg) | ![](/pics/screenshot_5.jpg) | ![](/pics/screenshot_6.jpg) |
+| ![](/pics/screenshot_7.jpg) | ![](/pics/screenshot_9.jpg) | ![](/pics/screenshot_10.jpg) |
+
+
