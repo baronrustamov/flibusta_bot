@@ -29,9 +29,9 @@ def sort_by_books_count(obj):
 
 
 @db_session
-def to_send_book(book):
+def to_send_book(book, authors=None):
     res = f'<b>{book.title}</b>'
-    authors = select(a for b in Book if b.id == book.id for a in b.authors)[:]
+    authors = authors if authors else authors_by_book_id(book.id)
     if authors:
         for a in authors:
             res += f' | {book.lang}\n<b>{a.normal_name}</b>\n'
@@ -47,7 +47,7 @@ def to_send_book(book):
 def to_share_book(book):
     url = 'https://telegram.me/flibusta_rebot?start='
     res = f'<b>{book.title}</b>'
-    authors = select(a for b in Book if b.id == book.id for a in b.authors)[:]
+    authors = authors_by_book_id(book.id)
     if authors:
         for a in authors:
             res += f' | {book.lang}\n<b>{a.normal_name}</b>\n'
@@ -104,6 +104,11 @@ def set_file_id(book_id, file_type, file_id):
         id_ = id_[0]
     else:
         id_ = FileId(book_id=book_id, file_type=file_type, file_id=file_id)
+
+
+@db_session
+def authors_by_book_id(id_):
+    return select(a for b in Book if b.id == id_ for a in b.authors)[:]
 
 
 @db_session

@@ -10,10 +10,8 @@ import transliterate  # https://github.com/barseghyanartur/transliterate
 import os
 import re
 import zipfile
-import time
 import logging
 import requests
-import shutil
 import ssl
 
 # yandex metric lib
@@ -22,7 +20,7 @@ import botan
 # bot's modules and config files
 import config
 from library import books_by_title, books_by_author, authors_by_name, book_by_id, to_send_book, to_share_book, \
-    get_file_id, set_file_id, author_by_id
+    get_file_id, set_file_id, authors_by_book_id, author_by_id
 from pony_tables import Book
 from debug_utils import timeit
 from users_db import get_user, set_lang_settings
@@ -85,10 +83,11 @@ def track(uid, msg, name):  # botan tracker
 
 def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept in Telegram Bot API
     filename = ''
-    author = author_by_id(book.id)
-    if author:
-        if author.short:
-            filename += author.short + '_-_'
+    authors = authors_by_book_id(book.id)
+    if authors:
+        for a in authors:
+            filename += a.short + '_'
+        filename += '-_'
     filename += book.title
     filename = transliterate.translit(filename, 'ru', reversed=True)
     filename = filename.replace('(', '').replace(')', '').replace(',', '').replace('…', '').replace('.', '')
@@ -247,8 +246,9 @@ def bot_books_by_author(callback: CallbackQuery):  # search books by author (use
     else:
         page_max = len(books) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
+    author = [author_by_id(id_)]
     for book in books[ELEMENTS_ON_PAGE * (page - 1):ELEMENTS_ON_PAGE * page]:
-        msg_text += to_send_book(book)
+        msg_text += to_send_book(book, authors=author)
     msg_text += f'<code>Страница {page}/{page_max}</code>'
     keyboard = get_keyboard(page, page_max, 'ba')
     if keyboard:
@@ -311,8 +311,9 @@ def bot_books_by_author(msg: Message):  # search books by author (use messages)
     else:
         page_max = len(books) // ELEMENTS_ON_PAGE + 1
     msg_text = ''
+    author = [author_by_id(id_)]
     for book in books[0:ELEMENTS_ON_PAGE]:
-        msg_text += to_send_book(book)
+        msg_text += to_send_book(book, authors=author)
     msg_text += f'<code>Страница {1}/{page_max}</code>'
     keyboard = get_keyboard(1, page_max, 'ba')
     if keyboard:
@@ -371,6 +372,7 @@ def send_by_file_id(foo):  # try to send document by file_id
             return foo(msg, type_, book_id=book_id, file_id=file_id.file_id)  # if file_id not found
         else:
             return foo(msg, type_, book_id=book_id)
+
     return try_send
 
 
@@ -413,11 +415,11 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
         bot.reply_to(msg, 'Книга не найдена!').wait()
         return
     caption = ''
-    author = author_by_id(book.id)
+    author = authors_by_book_id(book.id)
     if author:
-        if author.short:
-            caption += author.normal_name
-    caption += '\n' + book.title
+        for a in author:
+            caption += a.normal_name + '\n'
+    caption += book.title
     markup = InlineKeyboardMarkup()
     markup.row(
         InlineKeyboardButton('Поделиться',
