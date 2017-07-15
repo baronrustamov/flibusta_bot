@@ -12,10 +12,9 @@
 
 ## Скриншоты
 
-
-| ![](/pics/screenshot_1.jpg) | ![](/pics/screenshot_2.jpg) | ![](/pics/screenshot_3.jpg) |
-|-|-|-|-|
-| ![](/pics/screenshot_4.jpg) | ![](/pics/screenshot_5.jpg) | ![](/pics/screenshot_6.jpg) |
-| ![](/pics/screenshot_7.jpg) | ![](/pics/screenshot_9.jpg) | ![](/pics/screenshot_10.jpg) |
+![](/pics/screenshot_1.jpg) | ![](/pics/screenshot_2.jpg) | ![](/pics/screenshot_3.jpg)
+-|-|-
+![](/pics/screenshot_4.jpg) | ![](/pics/screenshot_5.jpg) | ![](/pics/screenshot_6.jpg)
+![](/pics/screenshot_7.jpg) | ![](/pics/screenshot_9.jpg) | ![](/pics/screenshot_10.jpg)
 
 
