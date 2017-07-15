@@ -2,5 +2,5 @@ PyMySQL==0.7.11
 aiohttp==2.2.3
 pony==0.7.1
 pyTelegramBotAPI==3.1.0
-requests=2.18.1
+requests==2.18.1
 transliterate==1.10
