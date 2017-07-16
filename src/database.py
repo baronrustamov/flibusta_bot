@@ -3,7 +3,6 @@ import gzip
 import os
 import argparse
 from pony import orm
-import pymysql
 
 import config
 
@@ -98,37 +97,32 @@ def update():
     lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
                 db=config.LIB_DATABASE, charset='utf8')
     lib_db.generate_mapping(create_tables=False)
-    conn = pymysql.connect(host=config.MYSQL_HOST, user=config.MYSQL_USER, password=config.MYSQL_PASSWORD, db='temp',
-                           charset='utf8mb4')
-    cursor = conn.cursor()
+    temp_db = orm.Database('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
+                           db = 'temp')
     with orm.db_session:
-        cursor.execute('SELECT bookId FROM temp.libbook;')
-        ids = [x[0] for x in cursor.fetchall()]
+        ids = temp_db.select('SELECT bookId FROM temp.libbook;')
         ids_len = len(ids)
         for i, id_ in enumerate(ids):
             print(f'Processing... {i}/{ids_len}')
-            cursor.execute(f'SELECT BookId, Title, Lang, FileType FROM temp.libbook WHERE BookId={id_};')
-            book = cursor.fetchone()
-            cursor.execute(f'SELECT AvtorId FROM temp.libavtor WHERE BookId={id_};')
+            book = temp_db.get(f'SELECT BookId, Title, Lang, FileType FROM temp.libbook WHERE BookId={id_};')
             new_book = Book(id=book[0], title=book[1], lang=book[2], file_type=book[3])
             orm.commit()
-            author_ids = [x[0] for x in cursor.fetchall()]
+            author_ids = temp_db.select(f'SELECT AvtorId FROM temp.libavtor WHERE BookId={id_};')
             for a_id in author_ids:
                 author = orm.select(a for a in Author if a.id == a_id)[:]
                 if author:
                     author = author[0]
                 else:
-                    cursor.execute(
+                    info = temp_db.get(
                         f'SELECT FirstName, MiddleName, LastName FROM temp.libavtorname WHERE AvtorId={a_id};')
-                    info = cursor.fetchone()
                     if not info:
                         continue
                     author = Author(id=a_id, first_name=info[0], middle_name=info[1], last_name=info[2])
                 author.books.add(new_book)
                 orm.commit()
-    cursor.execute('DROP DATABASE temp;')
-    conn.commit()
-    conn.close()
+        temp_db.execute('DROP DATABASE temp;')
+        temp_db.commit()
+    temp_db.disconnect()
     lib_db.disconnect()
 
 
