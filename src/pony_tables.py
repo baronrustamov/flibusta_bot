@@ -16,7 +16,7 @@ class Book(l_db.Entity):
 class FileId(l_db.Entity):
     book_id = Required(int)
     file_type = Required(str, 4)
-    file_id = Required(str, 64)
+    file_id = PrimaryKey(str, 64)
 
 
 class Author(l_db.Entity):
