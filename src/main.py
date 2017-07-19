@@ -20,7 +20,7 @@ import botan
 # bot's modules and config files
 import config
 from library import books_by_title, books_by_author, authors_by_name, book_by_id, to_send_book, to_share_book, \
-    get_file_id, set_file_id, authors_by_book_id, author_by_id
+    get_file_id, set_file_id, authors_by_book_id, author_by_id, get_random_book
 from pony_tables import Book
 from debug_utils import timeit
 from users_db import get_user, set_lang_settings
@@ -196,7 +196,7 @@ def bot_search_by_title(callback: CallbackQuery):  # search books by title
         bot.edit_message_text('Слишком короткий запрос!', chat_id=msg.chat.id, message_id=msg.message_id)
     user = get_user(callback.from_user.id)
     books = books_by_title(msg.reply_to_message.text, user)
-    if books is None:
+    if not books:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
@@ -234,7 +234,7 @@ def bot_books_by_author(callback: CallbackQuery):  # search books by author (use
     id_ = int(id_)
     user = get_user(callback.from_user.id)
     books = books_by_author(id_, user)
-    if books is None:
+    if not books:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
         track(msg.from_user.id, callback, 'search_by_title')
         return
@@ -266,7 +266,7 @@ def bot_books_by_author(callback: CallbackQuery):  # search books by author (use
 def bot_search_by_authors(callback: CallbackQuery):  # search authors
     msg = callback.message
     authors = authors_by_name(msg.reply_to_message.text)
-    if authors is None:
+    if not authors:
         r = bot.send_message(msg.chat.id, 'Автор не найден!')
         track(msg.from_user.id, callback, 'search_by_authors')
         r.wait()
@@ -300,7 +300,7 @@ def bot_books_by_author(msg: Message):  # search books by author (use messages)
     id_ = int(id_)
     user = get_user(msg.from_user.id)
     books = books_by_author(id_, user)
-    if books is None:
+    if not books:
         r = bot.reply_to(msg, 'Ошибка! Книги не найдены!')
         track(msg.from_user.id, msg, 'books_by_author')
         r.wait()
@@ -411,7 +411,7 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
         _, book_id = msg.text.split('_')
         book_id = int(book_id)
     book = book_by_id(book_id)
-    if book is None:
+    if not book:
         bot.reply_to(msg, 'Книга не найдена!').wait()
         return
     caption = ''
@@ -484,7 +484,7 @@ def bot_inline_hand(query: InlineQuery):  # inline search
     track(query.from_user.id, query, 'inline_search')
     user = get_user(query.from_user.id)
     books = books_by_title(query.query, user)
-    if books is None:
+    if not books:
         bot.answer_inline_query(query.id, [InlineQueryResultArticle(
             '1', 'Книги не найдены!', InputTextMessageContent('Книги не найдены!')
         )]
@@ -530,6 +530,12 @@ def lang_setup(query: CallbackQuery):  # language settings
     keyboard = make_settings_keyboard(query.from_user.id)
     bot.edit_message_reply_markup(chat_id=query.message.chat.id, message_id=query.message.message_id,
                                   reply_markup=keyboard).wait()
+
+
+@bot.message_handler(commands=['random'])
+def random_book(msg: Message):
+    book = get_random_book()
+    bot.reply_to(msg, to_send_book(book))
 
 
 @bot.message_handler(func=lambda message: True)

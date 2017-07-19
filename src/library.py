@@ -1,5 +1,6 @@
 from pony_tables import *
 from pony.orm import *
+from random import choice
 
 import config
 
@@ -79,31 +80,26 @@ def books_by_author(id_, user):
 @db_session
 def authors_by_name(name):
     return sorted(Author.select_by_sql(
-        "SELECT * FROM author WHERE MATCH (first_name, middle_name, last_name) AGAINST ($n IN BOOLEAN MODE)",
-        {'n': name}), key=sort_by_books_count, reverse=True)
+        "SELECT * FROM author WHERE MATCH (first_name, middle_name, last_name) AGAINST ($name IN BOOLEAN MODE)"),
+                  key=sort_by_books_count, reverse=True)
 
 
 @db_session
 def book_by_id(id_):
-    book = select(b for b in Book if b.id == id_)[:]
-    if book:
-        return book[0]
+    return get(b for b in Book if b.id == id_)
 
 
 @db_session
 def get_file_id(book_id, file_type):
-    id_ = select(f for f in FileId if f.book_id == book_id and f.file_type == file_type)[:]
-    if id_:
-        return id_[0]
+    return get(f for f in FileId if f.book_id == book_id and f.file_type == file_type)
 
 
 @db_session
 def set_file_id(book_id, file_type, file_id):
-    id_ = select(f for f in FileId if f.book_id == book_id and f.file_type == file_type)[:]
-    if id_:
-        id_ = id_[0]
-    else:
+    id_ = get(f for f in FileId if f.book_id == book_id and f.file_type == file_type)
+    if not id_:
         id_ = FileId(book_id=book_id, file_type=file_type, file_id=file_id)
+
 
 
 @db_session
@@ -113,6 +109,11 @@ def authors_by_book_id(id_):
 
 @db_session
 def author_by_id(id_):
-    author = select(a for a in Author if a.id == id_)[:]
-    if author:
-        return author[0]
+    return get(a for a in Author if a.id == id_)
+
+
+@db_session
+def get_random_book():
+    book_ids = select(b.id for b in Book)[:]
+    r_id = choice(book_ids)[0]
+    return get(b for b in Book if b.id == r_id)

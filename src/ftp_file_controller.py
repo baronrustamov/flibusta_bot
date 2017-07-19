@@ -4,10 +4,10 @@ import threading
 import os
 
 from telebot import logger
-import config
+from . import config
 
 
-class Controller(threading.Thread, mysql_class.MYSQLClass):
+class Controller(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         super(mysql_class.MYSQLClass).__init__()

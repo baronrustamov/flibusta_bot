@@ -66,7 +66,7 @@ def download():
         with open(file + '.gz', "wb") as f:
             f.write(r.content)
         with gzip.open(file + '.gz', "rb") as ziped:
-            with open('./databases/' + file, "wb") as f:
+            with open('../databases/' + file, "wb") as f:
                 f.write(ziped.read())
         os.remove(file + '.gz')
     return True
@@ -82,7 +82,7 @@ def update():
     print('Import files...')
     for file_ in files:
         print(f'Import {file_}')
-        os.system(f"mysql -u{config.MYSQL_USER} -p{config.MYSQL_PASSWORD} temp < ./databases/{file_}")
+        os.system(f"mysql -u{config.MYSQL_USER} -p{config.MYSQL_PASSWORD} temp < ../databases/{file_}")
 
     print('Clean up date...')
     db = orm.Database('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD, db='temp')
