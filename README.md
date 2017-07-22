@@ -1,5 +1,7 @@
 # Flibusta Bot
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/c33982edf5b9454aa4b11720b4b2bd37)](https://www.codacy.com/app/Kurbezz/flibusta_bot?utm_source=github.com&utm_medium=referral&utm_content=Kurbezz/flibusta_bot&utm_campaign=badger)
+
 Этот бот для загрузки книг с сайта Флибуста.
 Попробовать можно тут: [@flibusta_rebot](https://www.t.me/flibusta_rebot)
 
