@@ -31,11 +31,11 @@ def sort_by_books_count(obj):
 
 @db_session
 def to_send_book(book, authors=None):
-    res = f'<b>{book.title}</b>'
+    res = f'<b>{book.title}</b> | {book.lang}\n'
     authors = authors if authors else authors_by_book_id(book.id)
     if authors:
         for a in authors:
-            res += f' | {book.lang}\n<b>{a.normal_name}</b>\n'
+            res += f'<b>{a.normal_name}</b>\n'
     else:
         res += '\n'
     if book.file_type == 'fb2':
@@ -47,11 +47,11 @@ def to_send_book(book, authors=None):
 @db_session
 def to_share_book(book):
     url = 'https://telegram.me/flibusta_rebot?start='
-    res = f'<b>{book.title}</b>'
+    res = f'<b>{book.title}</b> | {book.lang}\n'
     authors = authors_by_book_id(book.id)
     if authors:
         for a in authors:
-            res += f' | {book.lang}\n<b>{a.normal_name}</b>\n'
+            res += f'<b>{a.normal_name}</b>\n'
     else:
         res += '\n'
     if book.file_type == 'fb2':
