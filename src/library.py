@@ -1,6 +1,7 @@
 from pony_tables import *
 from pony.orm import *
 from random import choice
+import re
 
 import config
 
@@ -27,6 +28,14 @@ def sort_by_alphabet(obj: Book) -> str:
 
 def sort_by_books_count(obj):
     return obj.books.count()
+
+
+def for_search(arg):
+    res = ''
+    for r in re.findall(r'([\w]+)', arg):
+        if len(r) >= 3:
+            res += f'+{r} '
+    return res
 
 
 @db_session
@@ -66,9 +75,10 @@ def to_share_book(book):
 
 @db_session
 def books_by_title(title, user):
+    if title:
+        title = for_search(title)
     return lang_filter(Book.select_by_sql(
-        "SELECT * FROM book WHERE MATCH (title) AGAINST ($t IN BOOLEAN MODE)",
-        {'t': title}), user)
+        "SELECT * FROM book WHERE MATCH (title) AGAINST ($title IN BOOLEAN MODE)"), user)
 
 
 @db_session
@@ -79,6 +89,8 @@ def books_by_author(id_, user):
 
 @db_session
 def authors_by_name(name):
+    if name:
+        name = for_search(name)
     return sorted(Author.select_by_sql(
         "SELECT * FROM author WHERE MATCH (first_name, middle_name, last_name) AGAINST ($name IN BOOLEAN MODE)"),
                   key=sort_by_books_count, reverse=True)
@@ -99,7 +111,6 @@ def set_file_id(book_id, file_type, file_id):
     id_ = get(f for f in FileId if f.book_id == book_id and f.file_type == file_type)
     if not id_:
         id_ = FileId(book_id=book_id, file_type=file_type, file_id=file_id)
-
 
 
 @db_session
