@@ -13,6 +13,8 @@ import zipfile
 import logging
 import requests
 import ssl
+import logging
+import time
 
 # yandex metric lib
 import botan
@@ -38,6 +40,8 @@ if config.DEBUG:
     logger.setLevel(logging.DEBUG)
 else:
     logger.setLevel(logging.INFO)
+
+logging.basicConfig(filename=('../logs/'+str(int(time.time())) + '.txt'), filemode='w')
 
 
 def track(uid, msg, name):  # botan tracker
