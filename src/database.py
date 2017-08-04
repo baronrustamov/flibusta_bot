@@ -22,32 +22,38 @@ def create_db():
                    f'CREATE DATABASE {config.USERS_DATABASE} CHARACTER SET utf8 COLLATE utf8_general_ci;')
 
 
-def create_tables():
+def create_tables(ch_tables):
     print('Creating tables...')
-    from pony_tables import lib_db, user_db
-    lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
-                passwd=config.MYSQL_PASSWORD, db=config.LIB_DATABASE)
-    lib_db.generate_mapping(create_tables=True)
-    lib_db.disconnect()
-    user_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
-                 passwd=config.MYSQL_PASSWORD, db=config.USERS_DATABASE)
-    user_db.generate_mapping(create_tables=True)
-    user_db.disconnect()
+    if 'lib' in ch_tables:
+        from pony_tables import lib_db
+        lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
+                    passwd=config.MYSQL_PASSWORD, db=config.LIB_DATABASE)
+        lib_db.generate_mapping(create_tables=True)
+        lib_db.disconnect()
+    if 'users' in ch_tables:
+        from pony_tables import user_db
+        user_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
+                     passwd=config.MYSQL_PASSWORD, db=config.USERS_DATABASE)
+        user_db.generate_mapping(create_tables=True)
+        user_db.disconnect()
 
 
-def delete_tables():
+def delete_tables(ch_tables):
     print('Deleting tables...')
-    from pony_tables import lib_db, user_db
-    lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
-                passwd=config.MYSQL_PASSWORD, db=config.LIB_DATABASE)
-    lib_db.generate_mapping()
-    lib_db.drop_all_tables()
-    lib_db.disconnect()
-    user_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
-                 passwd=config.MYSQL_PASSWORD, db=config.LIB_DATABASE)
-    user_db.generate_mapping()
-    user_db.drop_all_tables()
-    user_db.disconnect()
+    if 'lib' in ch_tables:
+        from pony_tables import lib_db
+        lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
+                    passwd=config.MYSQL_PASSWORD, db=config.LIB_DATABASE)
+        lib_db.generate_mapping()
+        lib_db.drop_all_tables(with_all_data=True)
+        lib_db.disconnect()
+    if 'users' in ch_tables:
+        from pony_tables import user_db
+        user_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER,
+                     passwd=config.MYSQL_PASSWORD, db=config.USERS_DATABASE)
+        user_db.generate_mapping()
+        user_db.drop_all_tables(with_all_data=True)
+        user_db.disconnect()
 
 
 def download():
@@ -98,7 +104,7 @@ def update():
                 db=config.LIB_DATABASE, charset='utf8')
     lib_db.generate_mapping(create_tables=False)
     temp_db = orm.Database('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
-                           db = 'temp')
+                           db='temp')
     with orm.db_session:
         ids = temp_db.select('SELECT bookId FROM temp.libbook;')
         ids_len = len(ids)
@@ -142,9 +148,13 @@ def __create_parser():
     create_group = parser.add_argument_group('Create block')
     create_group.add_argument('--c-db', '--create-database', action='store_true', help='Create databases')
     create_group.add_argument('--c-tb', '--create-tables', action='store_true', help='Create tables')
+    create_group.add_argument('--c-l-tb', '--create-lib-tables', action='store_true', help='Create library tables')
+    create_group.add_argument('--c-u-tb', '--create-users-tables', action='store_true', help='Create users tables')
 
     delete_group = parser.add_argument_group('Delete block')
     delete_group.add_argument('--d-tb', '--delete-tables', action='store_true', help='Delete tables')
+    delete_group.add_argument('--d-l-tb', '--delete-lib-tables', action='store_true', help='Delete library tables')
+    delete_group.add_argument('--d-u-tb', '--delete-users-tables', action='store_true', help='Delete users tables')
 
     update_group = parser.add_argument_group('Update database block')
     update_group.add_argument('--u', '--update', action='store_true', help='Date update')
@@ -162,7 +172,11 @@ if __name__ == '__main__':
     if args.c_db:
         create_db()
     elif args.c_tb:
-        create_tables()
+        create_tables(['lib', 'users'])
+    elif args.c_l_tb:
+        create_tables(['lib'])
+    elif args.c_u_tb:
+        create_tables(['users'])
 
     elif args.u:
         update()
@@ -170,7 +184,11 @@ if __name__ == '__main__':
         update_fulltext()
 
     elif args.d_tb:
-        delete_tables()
+        delete_tables(['lib', 'users'])
+    elif args.d_l_tb:
+        delete_tables(['lib'])
+    elif args.d_u_tb:
+        delete_tables(['users'])
 
     elif args.d:
         download()
