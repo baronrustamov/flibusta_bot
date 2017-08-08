@@ -55,3 +55,6 @@ Temporary Items
 # Cert
 *.pem
 *.pyc
+
+# Logs
+logs
