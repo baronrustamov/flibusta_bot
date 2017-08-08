@@ -73,10 +73,12 @@ def to_share_book(book):
                       f'/{book.file_type}_{book.id}</a>\n')
 
 
+# noinspection SyntaxError
 @db_session
 def books_by_title(title, user):
     if title:
         title = for_search(title)
+    # noinspection SyntaxError
     return lang_filter(Book.select_by_sql(
         "SELECT * FROM book WHERE MATCH (title) AGAINST ($title IN BOOLEAN MODE)"), user)
 
@@ -87,10 +89,12 @@ def books_by_author(id_, user):
                   key=sort_by_alphabet)
 
 
+# noinspection SyntaxError
 @db_session
 def authors_by_name(name):
     if name:
         name = for_search(name)
+    # noinspection SyntaxError
     return sorted(Author.select_by_sql(
         "SELECT * FROM author WHERE MATCH (first_name, middle_name, last_name) AGAINST ($name IN BOOLEAN MODE)"),
                   key=sort_by_books_count, reverse=True)

@@ -10,19 +10,17 @@ import transliterate  # https://github.com/barseghyanartur/transliterate
 import os
 import re
 import zipfile
-import logging
 import requests
 import ssl
 import logging
 import time
 
 # yandex metric lib
-import botan
+from botan import *
 
 # bot's modules and config files
 import config
-from library import books_by_title, books_by_author, authors_by_name, book_by_id, to_send_book, to_share_book, \
-    get_file_id, set_file_id, authors_by_book_id, author_by_id, get_random_book
+from library import *
 from pony_tables import Book
 from debug_utils import timeit
 from users_db import get_user, set_lang_settings
@@ -41,48 +39,7 @@ if config.DEBUG:
 else:
     logger.setLevel(logging.INFO)
 
-logging.basicConfig(filename=('../logs/'+str(int(time.time())) + '.txt'), filemode='w')
-
-
-def track(uid, msg, name):  # botan tracker
-    if type(msg) is Message:
-        return botan.track(config.BOTAN_TOKEN, uid,
-                           {'message': {
-                               'user': {
-                                   'id': msg.from_user.id,
-                                   'first_name': msg.from_user.first_name,
-                                   'username': msg.from_user.username,
-                                   'last_name': msg.from_user.last_name
-                               },
-                               'text': msg.text
-                           }
-                           },
-                           name=name)
-    if type(msg) is CallbackQuery:
-        return botan.track(config.BOTAN_TOKEN, uid,
-                           {'callback_query': {
-                               'user': {
-                                   'id': msg.from_user.id,
-                                   'first_name': msg.from_user.first_name,
-                                   'username': msg.from_user.username,
-                                   'last_name': msg.from_user.last_name
-                               },
-                               'text': msg.message.reply_to_message.text
-                           }
-                           },
-                           name=name)
-    if type(msg) is InlineQuery:
-        return botan.track(config.BOTAN_TOKEN, uid,
-                           {'inline_query': {
-                               'user': {
-                                   'id': msg.from_user.id,
-                                   'first_name': msg.from_user.first_name,
-                                   'username': msg.from_user.username,
-                                   'last_name': msg.from_user.last_name
-                               },
-                               'query': msg.query
-                           }},
-                           name=name)
+logging.basicConfig(filename=('../logs/' + str(int(time.time())) + '.txt'), filemode='w')
 
 
 def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept in Telegram Bot API
@@ -156,19 +113,19 @@ def start(msg: Message):
                      "Оставить отзыв /vote.\n"
                      "Материальная помощь /donate.\n")
         r = bot.reply_to(msg, start_msg)
-        track(msg.from_user.id, msg, 'start')
+        track_message(msg.from_user.id, msg, 'start')
         r.wait()
     else:
         type_, id_ = rq.split('_')
         bot_send_book(msg, type_, book_id=int(id_))
-        track(msg.from_user.id, msg, 'get_shared_book')
+        track_message(msg.from_user.id, msg, 'get_shared_book')
 
 
 @bot.message_handler(commands=['vote'])
 def vote_foo(msg: Message):  # send vote link
     vote_msg = "https://t.me/storebot?start=flibusta_rebot"
     r = bot.reply_to(msg, vote_msg)
-    track(msg.from_user.id, msg, 'vote')
+    track_message(msg.from_user.id, msg, 'vote')
     r.wait()
 
 
@@ -177,7 +134,7 @@ def help_foo(msg: Message):  # send help message
     help_msg = ("Лучше один раз увидеть, чем сто раз услышать.\n"
                 "https://youtu.be/HV6Wm87D6_A")
     r = bot.reply_to(msg, help_msg)
-    track(msg.from_user.id, msg, 'help')
+    track_message(msg.from_user.id, msg, 'help')
     r.wait()
 
 
@@ -188,7 +145,7 @@ def info(msg: Message):  # send information message
                 f"Версия бота {config.VERSION}\n"
                 "Github: https://goo.gl/V0Iw7m")
     r = bot.reply_to(msg, info_msg, disable_web_page_preview=True)
-    track(msg.from_user.id, msg, 'info')
+    track_message(msg.from_user.id, msg, 'info')
     r.wait()
 
 
@@ -202,7 +159,7 @@ def bot_search_by_title(callback: CallbackQuery):  # search books by title
     books = books_by_title(msg.reply_to_message.text, user)
     if not books:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
-        track(msg.from_user.id, callback, 'search_by_title')
+        track_callback(msg.from_user.id, callback, 'search_by_title')
         return
     r_action = bot.send_chat_action(msg.chat.id, 'typing')
     try:
@@ -225,7 +182,7 @@ def bot_search_by_title(callback: CallbackQuery):  # search books by title
                                   reply_markup=keyboard)
     else:
         r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
-    track(msg.from_user.id, callback, 'search_by_title')
+    track_callback(msg.from_user.id, callback, 'search_by_title')
     r_action.wait()
     r.wait()
 
@@ -240,7 +197,7 @@ def bot_books_by_author(callback: CallbackQuery):  # search books by author (use
     books = books_by_author(id_, user)
     if not books:
         bot.edit_message_text('Книги не найдены!', chat_id=msg.chat.id, message_id=msg.message_id)
-        track(msg.from_user.id, callback, 'search_by_title')
+        track_callback(msg.from_user.id, callback, 'search_by_title')
         return
     _, page = callback.data.split('_')
     page = int(page)
@@ -260,7 +217,7 @@ def bot_books_by_author(callback: CallbackQuery):  # search books by author (use
                                   reply_markup=keyboard)
     else:
         r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
-    track(msg.from_user.id, callback, 'books_by_author')
+    track_callback(msg.from_user.id, callback, 'books_by_author')
     r_action.wait()
     r.wait()
 
@@ -272,7 +229,7 @@ def bot_search_by_authors(callback: CallbackQuery):  # search authors
     authors = authors_by_name(msg.reply_to_message.text)
     if not authors:
         r = bot.send_message(msg.chat.id, 'Автор не найден!')
-        track(msg.from_user.id, callback, 'search_by_authors')
+        track_callback(msg.from_user.id, callback, 'search_by_authors')
         r.wait()
         return
     _, page = callback.data.split('_')
@@ -292,7 +249,7 @@ def bot_search_by_authors(callback: CallbackQuery):  # search authors
                                   reply_markup=keyboard)
     else:
         r = bot.edit_message_text(msg_text, chat_id=msg.chat.id, message_id=msg.message_id, parse_mode='HTML')
-    track(msg.from_user.id, callback, 'search_by_authors')
+    track_callback(msg.from_user.id, callback, 'search_by_authors')
     r_action.wait()
     r.wait()
 
@@ -306,7 +263,7 @@ def bot_books_by_author(msg: Message):  # search books by author (use messages)
     books = books_by_author(id_, user)
     if not books:
         r = bot.reply_to(msg, 'Ошибка! Книги не найдены!')
-        track(msg.from_user.id, msg, 'books_by_author')
+        track_message(msg.from_user.id, msg, 'books_by_author')
         r.wait()
         return
     r_action = bot.send_chat_action(msg.chat.id, 'typing')
@@ -324,7 +281,7 @@ def bot_books_by_author(msg: Message):  # search books by author (use messages)
         r = bot.reply_to(msg, msg_text, parse_mode='HTML', reply_markup=keyboard)
     else:
         r = bot.reply_to(msg, msg_text, parse_mode='HTML')
-    track(msg.from_user.id, msg, 'books_by_author')
+    track_message(msg.from_user.id, msg, 'books_by_author')
     r_action.wait()
     r.wait()
 
@@ -376,7 +333,6 @@ def send_by_file_id(foo):  # try to send document by file_id
             return foo(msg, type_, book_id=book_id, file_id=file_id.file_id)  # if file_id not found
         else:
             return foo(msg, type_, book_id=book_id)
-
     return try_send
 
 
@@ -389,7 +345,7 @@ def download(type_, book_id, msg):
     except requests.exceptions.ConnectionError as err:
         telebot.logger.exception(err)
         return None
-    if '<!DOCTYPE html' in str(r.content[:100]):  # if bot get html file with error message
+    if 'text/html' in r.headers['Content-Type']:  # if bot get html file with error message
         try:  # try download file from tor
             if type_ in ['fb2', 'epub', 'mobi']:
                 r = requests.get(f"http://flibustahezeous3.onion/b/{book_id}/{type_}",
@@ -401,7 +357,7 @@ def download(type_, book_id, msg):
             logger.debug(err)
             bot.reply_to(msg, "Ошибка подключения к серверу! Попробуйте позднее.").wait()
             return None
-    if '<!DOCTYPE html' in str(r.content[:100]) or '<html>' in str(r.content[:100]):  # send message to user when get
+    if 'text/html' in r.headers['Content-Type']:  # send message to user when get
         bot.reply_to(msg, "Ошибка! Попробуйте через пару минут :(").wait()  # html file
         return None
     return r
@@ -410,7 +366,7 @@ def download(type_, book_id, msg):
 @timeit
 @send_by_file_id
 def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # download from flibusta server and
-    track(msg.from_user.id, msg, 'download')  # send document to user
+    track_message(msg.from_user.id, msg, 'download')  # send document to user
     if book_id is None:
         _, book_id = msg.text.split('_')
         book_id = int(book_id)
@@ -470,7 +426,7 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
 @bot.inline_handler(func=lambda x: re.search(r'share_([0-9])+$', x.query) is not None)
 @timeit
 def bot_inline_share(query: InlineQuery):  # share book to others user with use inline query
-    track(query.from_user.id, query, 'share_book')
+    track_inline(query.from_user.id, query, 'share_book')
     _, book_id = query.query.split('_')
     result = []
     book = book_by_id(book_id)
@@ -485,7 +441,7 @@ def bot_inline_share(query: InlineQuery):  # share book to others user with use 
 @bot.inline_handler(func=lambda query: query.query)
 @timeit
 def bot_inline_hand(query: InlineQuery):  # inline search
-    track(query.from_user.id, query, 'inline_search')
+    track_inline(query.from_user.id, query, 'inline_search')
     user = get_user(query.from_user.id)
     books = books_by_title(query.query, user)
     if not books:
@@ -549,7 +505,7 @@ def search(msg: Message):
                  InlineKeyboardButton('По авторам', callback_data='a_1')
                  )
     r = bot.reply_to(msg, 'Поиск: ', reply_markup=keyboard)
-    track(msg.from_user.id, msg, 'receive_message')
+    track_message(msg.from_user.id, msg, 'receive_message')
     r.wait()
 
 
