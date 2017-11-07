@@ -62,12 +62,8 @@ class Author(l_db.Entity):
     def to_send(self) -> str:
         return f'👤 <b>{self.normal_name}</b>\n/a_{self.id}\n\n'
 
-lib_db = l_db
-
 
 class User(u_db.Entity):
     id = PrimaryKey(int)
     allow_be = Required(bool, default=True)
     allow_uk = Required(bool, default=True)
-
-user_db = u_db

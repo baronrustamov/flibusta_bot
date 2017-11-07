@@ -1,11 +1,11 @@
 from pony.orm import *
-from pony_tables import User, user_db
+from .tables import User, u_db
 
 import config
 
-user_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
-             db=config.USERS_DATABASE)
-user_db.generate_mapping()
+u_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
+          db=config.USERS_DATABASE)
+u_db.generate_mapping(create_tables=True)
 
 
 @db_session

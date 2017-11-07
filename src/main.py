@@ -20,10 +20,10 @@ from botan import *
 
 # bot's modules and config files
 import config
-from library import *
-from pony_tables import Book
+from database.library import *
+from database.tables import Book
 from debug_utils import timeit
-from users_db import get_user, set_lang_settings
+from database.users import get_user, set_lang_settings
 from webhook_check import Checker
 
 # bot's consts
