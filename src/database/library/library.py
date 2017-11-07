@@ -1,13 +1,13 @@
-from pony_tables import *
+from ..tables import *
 from pony.orm import *
 from random import choice
 import re
 
 import config
 
-lib_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
-            db=config.LIB_DATABASE)
-lib_db.generate_mapping()
+l_db.bind('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD,
+          db=config.LIB_DATABASE)
+l_db.generate_mapping(create_tables=True)
 
 
 def lang_filter(books, user):
@@ -73,12 +73,10 @@ def to_share_book(book):
                       f'/{book.file_type}_{book.id}</a>\n')
 
 
-# noinspection SyntaxError
 @db_session
 def books_by_title(title, user):
     if title:
         title = for_search(title)
-    # noinspection SyntaxError
     return lang_filter(Book.select_by_sql(
         "SELECT * FROM book WHERE MATCH (title) AGAINST ($title IN BOOLEAN MODE)"), user)
 
@@ -94,7 +92,6 @@ def books_by_author(id_, user):
 def authors_by_name(name):
     if name:
         name = for_search(name)
-    # noinspection SyntaxError
     return sorted(Author.select_by_sql(
         "SELECT * FROM author WHERE MATCH (first_name, middle_name, last_name) AGAINST ($name IN BOOLEAN MODE)"),
                   key=sort_by_books_count, reverse=True)
