@@ -2,9 +2,11 @@ import requests
 import gzip
 import os
 import argparse
-import objgraph
 from pony.orm import *
+
+
 from database.tables import Book, Author
+
 
 import config
 
@@ -14,8 +16,6 @@ BASIC_URL = 'http://flibusta.is'
 files = ['lib.libavtor.sql',
          'lib.libbook.sql',
          'lib.libavtorname.sql']
-
-set_sql_debug(True)
 
 db = Database('mysql', host=config.MYSQL_HOST, user=config.MYSQL_USER, passwd=config.MYSQL_PASSWORD)
 
@@ -120,14 +120,14 @@ def update():
     print('Update data...')
     for i in _update():
         add(i)
-        pass
 
 
 @db_session
 def update_fulltext():
     print('Update fulltext...')
-    db.execute("ALTER TABLE book ADD FULLTEXT FULLTEXT_TITLE (title);")
-    db.execute("ALTER TABLE author ADD FULLTEXT FULLTEXT_AUTHOR (first_name, middle_name, last_name);")
+    from database.tables import l_db
+    l_db.execute("ALTER TABLE book ADD FULLTEXT FULLTEXT_TITLE (title);")
+    l_db.execute("ALTER TABLE author ADD FULLTEXT FULLTEXT_AUTHOR (first_name, middle_name, last_name);")
 
 
 def __create_parser():
