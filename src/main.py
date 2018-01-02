@@ -13,7 +13,8 @@ import zipfile
 import requests
 import ssl
 import logging
-import time
+from logging.handlers import RotatingFileHandler
+from threading import RLock
 
 # yandex metric lib
 from botan import *
@@ -39,7 +40,9 @@ if config.DEBUG:
 else:
     logger.setLevel(logging.INFO)
 
-logging.basicConfig(filename=('../logs/' + str(int(time.time())) + '.txt'), filemode='w')
+work_with_hd = RLock()
+
+logging.basicConfig(handlers=[RotatingFileHandler('../logs/bot.log', mode='a', maxBytes=25*1024*1024)])
 
 
 def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept in Telegram Bot API
@@ -396,30 +399,37 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
     if r is None:
         return
     r_action = bot.send_chat_action(msg.chat.id, 'upload_document')
-    filename = normalize(book, type_)
-    with open(filename, 'wb') as f:
-        f.write(r.content)
-    if type_ == 'fb2':  # if type "fb2" extract file from archive
-        os.rename(filename, filename.replace('.fb2', '.zip'))
+
+    with work_with_hd:
+        filename = normalize(book, type_)
+        with open(filename, 'wb') as f:
+            f.write(r.content)
+        if type_ in ['fb2', 'pdf']:  # if type "fb2" or "pdf" extract file from archive
+            os.rename(filename, filename.replace(type_, '.zip'))
+            try:
+                zip_obj = zipfile.ZipFile(filename.replace(type_, '.zip'))
+            except zipfile.BadZipFile as err:
+                logger.debug(err)
+                return
+            extracted = None
+            for name in zip_obj.namelist():  # type: str
+                if type_ in name.lower():
+                    extracted = name
+            zip_obj.extract(extracted)
+            zip_obj.close()
+            os.rename(extracted, filename)
+            os.remove(filename.replace(type_, '.zip'))
         try:
-            zip_obj = zipfile.ZipFile(filename.replace('.fb2', '.zip'))
-        except zipfile.BadZipFile as err:
+            res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
+                                    caption=caption, reply_markup=markup).wait()
+        except requests.ConnectionError as err:
             logger.debug(err)
-            return
-        extracted = zip_obj.namelist()[0]
-        zip_obj.extract(extracted)
-        zip_obj.close()
-        os.rename(extracted, filename)
-        os.remove(filename.replace('.fb2', '.zip'))
-    try:
-        res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
-                                caption=caption, reply_markup=markup).wait()
-    except requests.ConnectionError as err:
-        logger.debug(err)
-    else:
-        set_file_id(book_id, type_, res.document.file_id)
-    finally:
-        os.remove(filename)
+        else:
+            if isinstance(res, tuple):
+                print(res)
+            set_file_id(book_id, type_, res.document.file_id)
+        finally:
+            os.remove(filename)
     r_action.wait()
 
 
