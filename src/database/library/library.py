@@ -87,7 +87,6 @@ def books_by_author(id_, user):
                   key=sort_by_alphabet)
 
 
-# noinspection SyntaxError
 @db_session
 def authors_by_name(name):
     if name:
