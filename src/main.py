@@ -294,34 +294,10 @@ def donation(msg: Message):  # send donation information
     bot.reply_to(msg, text, parse_mode='HTML').wait()
 
 
-@bot.message_handler(regexp='^/fb2_([0-9])+$')
-def send_fb2(message: Message):  # fb2 books handler
-    return bot_send_book(message, 'fb2')
-
-
-@bot.message_handler(regexp='^/epub_([0-9])+$')
-def send_epub(message: Message):  # epub books handler
-    return bot_send_book(message, 'epub')
-
-
-@bot.message_handler(regexp='^/mobi_([0-9])+$')
-def send_mobi(message: Message):  # mobi books handler
-    return bot_send_book(message, 'mobi')
-
-
-@bot.message_handler(regexp='^/djvu_([0-9])+$')
-def send_djvu(message: Message):  # djvu books handler
-    return bot_send_book(message, 'djvu')
-
-
-@bot.message_handler(regexp='^/pdf_([0-9])+$')
-def send_pdf(message: Message):  # pdf books handler
-    return bot_send_book(message, 'pdf')
-
-
-@bot.message_handler(regexp='^/doc_([0-9])+$')
-def send_doc(message: Message):  # doc books handler
-    return bot_send_book(message, 'doc')
+@bot.message_handler(regexp='^(fb2|epub|mobi|djvu|pdf|doc)_[0-9]+$')
+def get_book_handler(message: Message):
+    type_, book_id = message.text.split(' ')
+    return bot_send_book(message, type_)
 
 
 def send_by_file_id(foo):  # try to send document by file_id
