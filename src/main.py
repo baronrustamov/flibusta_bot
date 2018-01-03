@@ -53,13 +53,11 @@ def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept 
             filename += a.short + '_'
         filename += '-_'
     filename += book.title
-    filename = transliterate.translit(filename, 'ru', reversed=True)
-    filename = filename.replace('(', '').replace(')', '').replace(',', '').replace('…', '').replace('.', '')
-    filename = filename.replace('’', '').replace('!', '').replace('"', '').replace('?', '').replace('»', '')
-    filename = filename.replace('«', '').replace('\'', '').replace(':', '')
-    filename = filename.replace('—', '-').replace('/', '_').replace('№', 'N')
-    filename = filename.replace(' ', '_').replace('–', '-').replace('á', 'a').replace(' ', '_')
-    return filename + '.' + type_
+    return transliterate.translit(filename, 'ru', reversed=True).replace('(', '').replace(')', '').replace(
+        ',', '').replace('…', '').replace('.', '').replace('’', '').replace('!', '').replace('"', '').replace(
+        '?', '').replace('»', '').replace('«', '').replace('\'', '').replace(':', '').replace('—', '-').replace(
+        '/', '_').replace('№', 'N').replace(' ', '_').replace('–', '-').replace('á', 'a').replace(
+        ' ', '_') + '.' + type_
 
 
 def get_keyboard(page: int, pages: int, t: str) -> InlineKeyboardMarkup or None:  # make keyboard for current page
@@ -405,9 +403,9 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
         with open(filename, 'wb') as f:
             f.write(r.content)
         if type_ in ['fb2', 'pdf']:  # if type "fb2" or "pdf" extract file from archive
-            os.rename(filename, filename.replace(type_, '.zip'))
+            os.rename(filename, filename.replace(type_, 'zip'))
             try:
-                zip_obj = zipfile.ZipFile(filename.replace(type_, '.zip'))
+                zip_obj = zipfile.ZipFile(filename.replace(type_, 'zip'))
             except zipfile.BadZipFile as err:
                 logger.debug(err)
                 return
@@ -418,7 +416,7 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
             zip_obj.extract(extracted)
             zip_obj.close()
             os.rename(extracted, filename)
-            os.remove(filename.replace(type_, '.zip'))
+            os.remove(filename.replace(type_, 'zip'))
         try:
             res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
                                     caption=caption, reply_markup=markup).wait()
@@ -528,7 +526,6 @@ if config.WEBHOOK:
 
     checker = Checker(bot)
 
-
     async def handle(request):
         if request.match_info.get('token') == config.TOKEN:
             request_body_dict = await request.json()
@@ -549,16 +546,13 @@ if config.WEBHOOK:
     context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
     context.load_cert_chain(config.WEBHOOK_SSL_CERT, config.WEBHOOK_SSL_PRIV)
 
-    try:
-        web.run_app(app,
-                    host=config.WEBHOOK_LISTEN,
-                    port=config.WEBHOOK_PORT,
-                    ssl_context=context)
-    except KeyboardInterrupt:
-        pass
+    web.run_app(app,
+                host=config.WEBHOOK_LISTEN,
+                port=config.WEBHOOK_PORT,
+                ssl_context=context)
 
     checker.stop()
 
     bot.remove_webhook()
 else:
-    bot.polling()
+    bot.polling(none_stop=True)
