@@ -219,7 +219,7 @@ def bot_search_by_authors(callback: CallbackQuery):  # search authors
 
 
 @bot.message_handler(regexp='/a_([0-9])+')
-def bot_books_by_author(msg: Message):  # search books by author (use messages)
+def search_books_by_author(msg: Message):  # search books by author (use messages)
     id_ = int(msg.text.split('_')[1])
     user = get_user(msg.from_user.id)
     books = books_by_author(id_, user)
@@ -245,9 +245,9 @@ def donation(msg: Message):  # send donation information
     bot.reply_to(msg, text, parse_mode='HTML').wait()
 
 
-@bot.message_handler(regexp='^(fb2|epub|mobi|djvu|pdf|doc)_[0-9]+$')
+@bot.message_handler(regexp='^/(fb2|epub|mobi|djvu|pdf|doc)_[0-9]+$')
 def get_book_handler(message: Message):
-    type_, book_id = message.text.split(' ')
+    type_, book_id = message.text.replace('/', '').split('_')
     return bot_send_book(message, type_, book_id=book_id)
 
 
@@ -286,7 +286,7 @@ def download(type_, book_id, msg, with_proxies: bool = False):
         else:
             return download(type_, book_id, msg, with_proxies=True)
     else:
-        if 'text/html' in r.headers['Content-Type']:
+        if r.headers['Content-Type'] == 'text/html':
             if with_proxies:
                 bot.reply_to(msg, "Ошибка! Попробуйте через пару минут :(").wait()
             else:
@@ -303,7 +303,7 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
     if not book:
         bot.reply_to(msg, 'Книга не найдена!').wait()
         return
-    caption = '\n'.join([author.normal_name for author in authors_by_book_id(book.id)]) + book.title
+    caption = '\n'.join([author.normal_name for author in authors_by_book_id(book.id)]) + '\n' + book.title
     markup = InlineKeyboardMarkup()
     markup.row(
         InlineKeyboardButton('Поделиться',
@@ -326,7 +326,7 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
         filename = normalize(book, type_)
         with open(filename, 'wb') as f:
             f.write(r.content)
-        if type_ in ['fb2', 'pdf']:  # if type "fb2" or "pdf" extract file from archive
+        if r.headers['Content-Type'] == 'application/zip':  # if type "fb2" or "pdf" extract file from archive
             os.rename(filename, filename.replace(type_, 'zip'))
             try:
                 zip_obj = zipfile.ZipFile(filename.replace(type_, 'zip'))
@@ -348,7 +348,9 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
             logger.debug(err)
         else:
             if isinstance(res, tuple):
-                print(res)
+                logger.debug(res)  # ToDo
+                bot.reply_to(msg, 'Произошла ошибка :( Пока я не умею с ней работать, но обязательно научусь!').wait()
+                return
             set_file_id(book_id, type_, res.document.file_id)
         finally:
             os.remove(filename)
