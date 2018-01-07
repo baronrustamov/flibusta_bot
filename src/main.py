@@ -14,7 +14,7 @@ import requests
 import ssl
 import logging
 from logging.handlers import RotatingFileHandler
-from threading import RLock
+import io
 
 # yandex metric lib
 from botan import *
@@ -39,8 +39,6 @@ if config.DEBUG:
 else:
     logger.setLevel(logging.INFO)
 
-work_with_hd = RLock()
-
 logging.basicConfig(handlers=[RotatingFileHandler('../logs/bot.log', mode='a', maxBytes=25 * 1024 * 1024)])
 
 
@@ -50,6 +48,8 @@ def normalize(book: Book, type_: str) -> str:  # remove chars that don't accept 
     if authors:
         filename = '_'.join([a.short for a in authors]) + '_-_'
     filename += book.title
+    if filename[-1] == ' ':
+        filename = filename[:-1]
     return transliterate.translit(filename, 'ru', reversed=True).replace('(', '').replace(')', '').replace(
         ',', '').replace('…', '').replace('.', '').replace('’', '').replace('!', '').replace('"', '').replace(
         '?', '').replace('»', '').replace('«', '').replace('\'', '').replace(':', '').replace('—', '-').replace(
@@ -318,42 +318,42 @@ def bot_send_book(msg: Message, type_: str, book_id=None, file_id=None):  # down
             return
 
     r = download(type_, book_id, msg)
-    if r is None: return
+    if r is None:
+        return
 
     r_action = bot.send_chat_action(msg.chat.id, 'upload_document')
 
-    with work_with_hd:
-        filename = normalize(book, type_)
-        with open(filename, 'wb') as f:
-            f.write(r.content)
-        if r.headers['Content-Type'] == 'application/zip':  # if type "fb2" or "pdf" extract file from archive
-            os.rename(filename, filename.replace(type_, 'zip'))
-            try:
-                zip_obj = zipfile.ZipFile(filename.replace(type_, 'zip'))
-            except zipfile.BadZipFile as err:
-                logger.debug(err)
-                return
-            extracted = None
-            for name in zip_obj.namelist():  # type: str
-                if type_ in name.lower():
-                    extracted = name
-            zip_obj.extract(extracted)
-            zip_obj.close()
-            os.rename(extracted, filename)
-            os.remove(filename.replace(type_, 'zip'))
+    filename = normalize(book, type_)
+
+    if r.headers['Content-Type'] == 'application/zip':
         try:
-            res = bot.send_document(msg.chat.id, open(filename, 'rb'), reply_to_message_id=msg.message_id,
-                                    caption=caption, reply_markup=markup).wait()
-        except requests.ConnectionError as err:
+            zip_obj = zipfile.ZipFile(io.BytesIO(r.content))
+        except zipfile.BadZipFile as err:
             logger.debug(err)
-        else:
-            if isinstance(res, tuple):
-                logger.debug(res)  # ToDo
-                bot.reply_to(msg, 'Произошла ошибка :( Пока я не умею с ней работать, но обязательно научусь!').wait()
-                return
-            set_file_id(book_id, type_, res.document.file_id)
-        finally:
-            os.remove(filename)
+            return
+        to_extract = None
+        for name in zip_obj.namelist():  # type: str
+            if type_ in name.lower():
+                to_extract = name
+        r_file = io.BytesIO(zip_obj.read(to_extract))
+    else:
+        r_file = io.BytesIO(r.content)
+
+    r_file.name = filename
+
+    try:
+        res = bot.send_document(msg.chat.id, r_file, reply_to_message_id=msg.message_id,
+                                caption=caption, reply_markup=markup).wait()
+    except requests.ConnectionError as err:
+        logger.debug(err)
+    else:
+        if isinstance(res, tuple):
+            logger.debug(res)  # ToDo
+            bot.reply_to(msg, 'Произошла ошибка :( Пока я не умею с ней работать, но обязательно научусь!\n'
+                              'Можешь попробовать позже').wait()
+            return
+        set_file_id(book_id, type_, res.document.file_id)
+
     r_action.wait()
 
 
