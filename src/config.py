@@ -1,47 +1,20 @@
-# bot
-TOKEN = ''
-DEBUG = False
-WEBHOOK = True
+BOT_TOKEN = ""
 
+BOT_NAME = "flibusta_bot"
 
-# botan
-BOTAN_TOKEN = ''
+DB_NAME = BOT_NAME
+DB_USER = BOT_NAME
+DB_PASSWORD = ""
+DB_HOST = ""
+DB_PORT = ""
 
+FLIBUSTA_SERVER = ""
 
-# webhook
-WEBHOOK_HOST = ''
 WEBHOOK_PORT = 443
-WEBHOOK_LISTEN = '0.0.0.0'
+WEBHOOK_HOST = f"https://site.ru:{WEBHOOK_PORT}/{BOT_NAME}"
+WEBHOOK_LISTEN = "0.0.0.0"
 
-WEBHOOK_SSL_CERT = './cert/webhook_cert.pem'
-WEBHOOK_SSL_PRIV = './cert/webhook_pkey.pem'
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 7770
 
-WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}:{WEBHOOK_PORT}"
-WEBHOOK_URL_PATH = f"/{TOKEN}/"
-
-# info
-VERSION = "2.5.1"
-DB_DATE = "12.07.2017"
-
-
-# database
-MYSQL_HOST = 'localhost'
-MYSQL_USER = ''
-MYSQL_PASSWORD = ''
-LIB_DATABASE = 'flibusta'
-USERS_DATABASE = 'flibusta_users'
-
-
-# ftp_controller
-#   USE_FTP = True
-LIFE_TIME = 3600  # seconds
-FTP_DIR = './ftp'
-
-
-# time
-TIME_ZONE = 2
-
-
-# tor
-PROXIES = {'http': 'localhost:8118',
-           'https': 'localhost:8118'}
+CHATBASE_API_KEY = ""
