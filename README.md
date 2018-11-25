@@ -19,4 +19,30 @@
 ![](/pics/screenshot_4.jpg) | ![](/pics/screenshot_5.jpg) | ![](/pics/screenshot_6.jpg)
 ![](/pics/screenshot_7.jpg) | ![](/pics/screenshot_9.jpg) | ![](/pics/screenshot_10.jpg)
 
+## Настройка
+1. Настройка бота
+1.1. Создать бота у [@BotFather](https://www.t.me/BotFather)
+1.2.  Вписать token в BOT_TOKEN
+1.3. Вписать username в BOT_NAME
+2. Настройка БД
+2.1. Установить и настроить PostgreSQL
+2.2. Вписать имя БД в DB_NAME
+2.3. Вписать имя пользователя от БД в DB_USER
+2.4. Вписать пароль от БД в DB_PASSWORD
+2.5. Вписать адрес БД в DB_HOST
+2.6. Вписать порт БД в DB_PORT
+2.7 Выполнить миграцию с помощью manage.py
+3. Настроить [flibusta server](https://github.com/Kurbezz/flibusta_server)
+4. Настройка webhook
+4.1 Вписать порт webhook'a в WEBHOOK_PORT
+4.2 Вписать адрес webhook'a в WEBHOOK_HOST
+5. Настройка сервера
+5.1 Вписать прослушиваемые адреса в SERVER_HOST
+5.2 Вписать прослушиваемый порт в SERVER_PORT
+6. Настройка ChatBase 
+6.1 Вписать ChatBase token в CHATBASE_API_TOKEN
+7. Установка зависимостей
+7.1 Установить зависимости из requirements.txt
 
+## Запуск
+Запустить main.py
