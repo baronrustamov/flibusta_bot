@@ -21,19 +21,9 @@ application = get_wsgi_application()
 from db.models import TelegramUser, Settings
 from django.db.models import ObjectDoesNotExist
 
-proxies = {
-    'http': 'socks5://kurbezz:97340098@18.222.81.181:1080',
-    'https': 'socks5://kurbezz:97340098@18.222.81.181:1080'
-}
-
-# apihelper.proxy = proxies
-
 
 bot = AsyncTeleBot(config.BOT_TOKEN, num_threads=4)
 sender = Sender(bot)
-
-
-last_update = time.time()
 
 
 def update_user(msg: ttypes.Message):
@@ -203,27 +193,6 @@ async def handle(request):
         return web.Response(status=403)
 
 
-check_can_run = True
-
-
-def check_last_update():
-    global last_update
-    global check_can_run
-
-    def update():
-        global last_update
-
-        bot.remove_webhook()
-        time.sleep(1)
-        bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
-        last_update = time.time()
-
-    while check_can_run:
-        if time.time() - last_update > 15 * 60:
-            update()
-        time.sleep(3 * 60)
-
-
 if __name__ == "__main__":
     bot.remove_webhook()
 
@@ -235,14 +204,8 @@ if __name__ == "__main__":
 
     bot.set_webhook(url=WEBHOOK_URL_BASE+WEBHOOK_URL_PATH)
 
-    # check_thread = threading.Thread(target=check_last_update)
-    # check_thread.start()
-
     web.run_app(
         app,
         host=config.SERVER_HOST,
         port=config.SERVER_PORT
     )
-
-    # check_can_run = False
-    # check_thread.join()
